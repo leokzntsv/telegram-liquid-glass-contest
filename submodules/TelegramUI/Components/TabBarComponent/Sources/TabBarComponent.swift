@@ -7,6 +7,7 @@ import ComponentDisplayAdapters
 import GlassBackgroundComponent
 import MultilineTextComponent
 import LottieComponent
+import SwiftSignalKit
 import UIKitRuntimeUtils
 import BundleIconComponent
 import TextBadgeComponent
@@ -44,6 +45,7 @@ public final class TabBarComponent: Component {
     public let theme: PresentationTheme
     public let items: [Item]
     public let selectedId: AnyHashable?
+    public var hoveredId: AnyHashable?
     public let isTablet: Bool
     
     public init(
@@ -55,6 +57,7 @@ public final class TabBarComponent: Component {
         self.theme = theme
         self.items = items
         self.selectedId = selectedId
+        self.hoveredId = selectedId
         self.isTablet = isTablet
     }
     
@@ -87,7 +90,10 @@ public final class TabBarComponent: Component {
         
         private var component: TabBarComponent?
         private weak var state: EmptyComponentState?
-        
+
+        private var isDraggingSelector = false
+        private var selectionConfirmTimer: SwiftSignalKit.Timer?
+
         public override init(frame: CGRect) {
             self.backgroundView = GlassBackgroundView()
             self.selectionView = GlassBackgroundView.ContentImageView()
@@ -150,6 +156,7 @@ public final class TabBarComponent: Component {
             } else {
                 self.contextGestureContainerView.addSubview(self.backgroundView)
                 self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
+                self.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(self.onPanGesture(_:))))
             }
             
             self.contextGestureContainerView.shouldBegin = { [weak self] point in
@@ -332,7 +339,101 @@ public final class TabBarComponent: Component {
                 }
             }
         }
-        
+
+        @objc private func onPanGesture(_ recognizer: UIPanGestureRecognizer) {
+            guard let component = self.component else {
+                return
+            }
+
+            let innerInset: CGFloat = 3.0
+            let point = recognizer.location(in: self)
+
+            let leftLimit = innerInset + selectionView.bounds.width / 2.0
+            let rightLimit = bounds.width - innerInset - selectionView.bounds.width / 2.0
+            let clampedX = max(leftLimit, min(rightLimit, point.x))
+
+            if recognizer.state == .began {
+                isDraggingSelector = true
+
+                var frame = selectionView.frame
+                frame.origin.x = clampedX - frame.width / 2.0
+
+                let snapTransition = ComponentTransition.easeInOut(duration: 0.1)
+                snapTransition.setFrame(view: selectionView, frame: frame)
+            }
+
+            var closestItemView: (AnyHashable, CGFloat)?
+            for (id, itemView) in self.itemViews {
+                guard let itemView = itemView.view else {
+                    continue
+                }
+                let distance = abs(point.x - itemView.center.x)
+                if let previousClosestItemView = closestItemView {
+                    if previousClosestItemView.1 > distance {
+                        closestItemView = (id, distance)
+                    }
+                } else {
+                    closestItemView = (id, distance)
+                }
+            }
+
+            var hoveredItem: Item?
+            var isHoveredUpdated = false
+            if let (id, _) = closestItemView {
+                guard let item = component.items.first(where: { $0.id == id }) else {
+                    return
+                }
+                if component.hoveredId != id {
+                    isHoveredUpdated = true
+                }
+                component.hoveredId = id
+                hoveredItem = item
+            }
+
+            var frame = selectionView.frame
+            frame.origin.x = clampedX - frame.width / 2.0
+            selectionView.frame = frame
+
+            if recognizer.state == .began || recognizer.state == .changed {
+                if isHoveredUpdated {
+                    self.selectionConfirmTimer?.invalidate()
+                    let selectionConfirmTimer = SwiftSignalKit.Timer(timeout: 0.2, repeat: false, completion: { [weak self] in
+                        if let strongSelf = self, let hoveredItem, strongSelf.component?.hoveredId == hoveredItem.id {
+                            strongSelf.selectionConfirmTimer?.invalidate()
+                            strongSelf.selectionConfirmTimer = nil
+
+                            hoveredItem.action(false)
+                            if let componentView = strongSelf.itemViews[hoveredItem.id], let itemView = componentView.view as? ItemComponent.View {
+                                itemView.playSelectionAnimation()
+                            }
+                        }
+                    }, queue: Queue.mainQueue())
+                    self.selectionConfirmTimer = selectionConfirmTimer
+                    selectionConfirmTimer.start()
+                }
+            }
+
+            if recognizer.state == .ended || recognizer.state == .cancelled || recognizer.state == .failed {
+                guard let hoveredItem, /*let selectedId = component.selectedId,*/ let targetFrame = self.itemViews[hoveredItem.id]?.view?.frame else {
+                    self.isDraggingSelector = false
+                    return
+                }
+                let snapTransition = ComponentTransition.easeInOut(duration: 0.15)
+                snapTransition.setFrame(view: self.selectionView, frame: targetFrame) { completed in
+                    guard completed else { return }
+                    hoveredItem.action(false)
+                }
+                self.isDraggingSelector = false
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+//                    hoveredItem.action(false)
+//                }
+
+                isDraggingSelector = false
+                selectionConfirmTimer?.invalidate()
+                selectionConfirmTimer = nil
+            }
+        }
+
         override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             return super.hitTest(point, with: event)
         }
@@ -528,14 +629,14 @@ public final class TabBarComponent: Component {
                 self.selectedItemViews.removeValue(forKey: id)
             }
             
-            if let selectionFrame, self.nativeTabBar == nil {
+            if !self.isDraggingSelector, let selectionFrame, self.nativeTabBar == nil {
                 var selectionViewTransition = transition
                 if self.selectionView.superview == nil {
                     selectionViewTransition = selectionViewTransition.withAnimation(.none)
                     self.backgroundView.contentView.addSubview(self.selectionView)
                 }
                 selectionViewTransition.setFrame(view: self.selectionView, frame: selectionFrame)
-            } else if self.selectionView.superview != nil {
+            } else if !self.isDraggingSelector, self.selectionView.superview != nil {
                 self.selectionView.removeFromSuperview()
             }
             
