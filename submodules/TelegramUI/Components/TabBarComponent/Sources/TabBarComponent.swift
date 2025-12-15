@@ -78,8 +78,27 @@ public final class TabBarComponent: Component {
     }
     
     public final class View: UIView, UITabBarDelegate, UIGestureRecognizerDelegate {
+        private final class BlurredSelectionView: UIView {
+            override func layoutSubviews() {
+                super.layoutSubviews()
+                layer.cornerRadius = bounds.height * 0.5
+            }
+
+            override init(frame: CGRect) {
+                super.init(frame: frame)
+                clipsToBounds = true
+                layer.cornerRadius = bounds.height * 0.5
+            }
+
+            required public init?(coder: NSCoder) {
+                fatalError("init(coder:) has not been implemented")
+            }
+        }
+
         private let backgroundView: GlassBackgroundView
-        private let selectionView: GlassBackgroundView.ContentImageView
+        private let collapsedSelectionView: GlassBackgroundView.ContentImageView
+        private let expandedSelectionView: BlurredSelectionView
+
         private let contextGestureContainerView: ContextControllerSourceView
         private let nativeTabBar: UITabBar?
         
@@ -96,8 +115,11 @@ public final class TabBarComponent: Component {
 
         public override init(frame: CGRect) {
             self.backgroundView = GlassBackgroundView()
-            self.selectionView = GlassBackgroundView.ContentImageView()
-            
+            self.collapsedSelectionView = GlassBackgroundView.ContentImageView()
+            self.expandedSelectionView = BlurredSelectionView()
+            self.expandedSelectionView.alpha = 0
+            self.expandedSelectionView.backgroundColor = .systemBlue
+
             self.contextGestureContainerView = ContextControllerSourceView()
             self.contextGestureContainerView.isGestureEnabled = true
             
@@ -340,26 +362,46 @@ public final class TabBarComponent: Component {
             }
         }
 
+        private var smoothedSpeed: CGFloat = 0
+        private var lastSmoothedSpeed: CGFloat = 0
+        private var deformAmount: CGFloat = 0
+        private let maxDeform: CGFloat = 0.3
+        private let speedForMaxDeform: CGFloat = 3000
+        private let smoothingFactor: CGFloat = 0.85
+
+        private var itemSize: CGSize?
+        private let heightDiff: CGFloat = 14
+        private let widthDiff: CGFloat = 14
+
         @objc private func onPanGesture(_ recognizer: UIPanGestureRecognizer) {
-            guard let component = self.component else {
+            guard let component = self.component, let collapsedSize = itemSize else {
                 return
             }
 
+            let expandedSize = CGSize(width: collapsedSize.width + widthDiff, height: collapsedSize.height + heightDiff)
             let innerInset: CGFloat = 3.0
             let point = recognizer.location(in: self)
 
-            let leftLimit = innerInset + selectionView.bounds.width / 2.0
-            let rightLimit = bounds.width - innerInset - selectionView.bounds.width / 2.0
+            let leftLimit = innerInset + collapsedSize.width * 0.5
+            let rightLimit = bounds.width - innerInset - collapsedSize.width * 0.5
             let clampedX = max(leftLimit, min(rightLimit, point.x))
 
             if recognizer.state == .began {
                 isDraggingSelector = true
+                smoothedSpeed = 0
+                lastSmoothedSpeed = 0
 
-                var frame = selectionView.frame
-                frame.origin.x = clampedX - frame.width / 2.0
+                var frame = expandedSelectionView.frame
+                frame.size.width = expandedSize.width
+                frame.size.height = expandedSize.height
+                frame.origin.y = frame.origin.y - heightDiff * 0.5
 
-                let snapTransition = ComponentTransition.easeInOut(duration: 0.1)
-                snapTransition.setFrame(view: selectionView, frame: frame)
+                let expandTransition = ComponentTransition.spring(duration: 0.2)
+                expandTransition.setFrame(view: expandedSelectionView, frame: frame)
+                expandTransition.setFrame(view: collapsedSelectionView, frame: frame)
+                expandTransition.setAlpha(view: expandedSelectionView, alpha: 1)
+                expandTransition.setAlpha(view: collapsedSelectionView, alpha: 0)
+                expandTransition.setCornerRadius(layer: expandedSelectionView.layer, cornerRadius: expandedSize.height * 0.5)
             }
 
             var closestItemView: (AnyHashable, CGFloat)?
@@ -390,10 +432,6 @@ public final class TabBarComponent: Component {
                 hoveredItem = item
             }
 
-            var frame = selectionView.frame
-            frame.origin.x = clampedX - frame.width / 2.0
-            selectionView.frame = frame
-
             if recognizer.state == .began || recognizer.state == .changed {
                 if isHoveredUpdated {
                     self.selectionConfirmTimer?.invalidate()
@@ -413,24 +451,94 @@ public final class TabBarComponent: Component {
                 }
             }
 
+            if recognizer.state == .changed {
+                expandedSelectionView.layer.removeAnimation(forKey: "position")
+
+                var center = expandedSelectionView.center
+                center.x = clampedX
+                expandedSelectionView.center = center
+                collapsedSelectionView.center = center
+
+                let rawSpeed = abs(recognizer.velocity(in: self).x)
+                smoothedSpeed = smoothingFactor * smoothedSpeed + (1 - smoothingFactor) * rawSpeed
+
+                let increasing = lastSmoothedSpeed == 0 || smoothedSpeed > lastSmoothedSpeed + 15
+
+                if increasing {
+                    expandedSelectionView.layer.removeAnimation(forKey: "decayBoundsAnimation")
+                    expandedSelectionView.layer.removeAnimation(forKey: "decayCornerRadiusAnimation")
+
+                    let baseSize = CGSize(width: expandedSize.width, height: expandedSize.height)
+
+                    let targetDeform = min(maxDeform, smoothedSpeed / speedForMaxDeform)
+                    deformAmount = targetDeform
+
+                    let targetHeight = baseSize.height * (1 + deformAmount)
+                    let targetWidth = baseSize.width / (1 + deformAmount)
+
+                    let presLayer = expandedSelectionView.layer.presentation() ?? expandedSelectionView.layer
+                    let currentBounds = presLayer.bounds
+
+                    let lerp: CGFloat = 0.2
+                    let newHeight = max(expandedSize.height, currentBounds.height + (targetHeight - currentBounds.height) * lerp)
+                    let newWidth = min(expandedSize.width, currentBounds.width + (targetWidth - currentBounds.width) * lerp)
+
+                    expandedSelectionView.bounds.size = CGSize(width: newWidth, height: newHeight)
+                    expandedSelectionView.layer.cornerRadius = newHeight * 0.5
+                } else {
+                    if expandedSelectionView.layer.animation(forKey: "decayBoundsAnimation") == nil || expandedSelectionView.layer.animation(forKey: "decayCornerRadiusAnimation") == nil {
+                        let presentation = expandedSelectionView.layer.presentation() ?? expandedSelectionView.layer
+                        let baseSize = CGSize(width: expandedSize.width, height: expandedSize.height)
+                        let baseCornerRadius = expandedSize.height * 0.5
+
+                        let boundsSpring = CASpringAnimation(keyPath: "bounds.size")
+                        boundsSpring.fromValue = presentation.bounds.size
+                        boundsSpring.toValue = baseSize
+                        boundsSpring.damping = 12
+                        boundsSpring.stiffness = 180
+                        boundsSpring.mass = 1
+                        boundsSpring.duration = boundsSpring.settlingDuration
+
+                        let cornerRadiusSpring = CASpringAnimation(keyPath: "cornerRadius")
+                        cornerRadiusSpring.fromValue = presentation.cornerRadius
+                        cornerRadiusSpring.toValue = baseCornerRadius
+                        cornerRadiusSpring.damping = 12
+                        cornerRadiusSpring.stiffness = 180
+                        cornerRadiusSpring.mass = 1
+                        cornerRadiusSpring.duration = cornerRadiusSpring.settlingDuration
+
+                        expandedSelectionView.bounds.size = baseSize
+                        expandedSelectionView.layer.cornerRadius = baseCornerRadius
+                        expandedSelectionView.layer.add(boundsSpring, forKey: "decayBoundsAnimation")
+                        expandedSelectionView.layer.add(cornerRadiusSpring, forKey: "decayCornerRadiusAnimation")
+                    }
+                }
+
+                lastSmoothedSpeed = smoothedSpeed
+            }
+
             if recognizer.state == .ended || recognizer.state == .cancelled || recognizer.state == .failed {
-                guard let hoveredItem, /*let selectedId = component.selectedId,*/ let targetFrame = self.itemViews[hoveredItem.id]?.view?.frame else {
+                guard let hoveredItem, let targetFrame = self.itemViews[hoveredItem.id]?.view?.frame else {
                     self.isDraggingSelector = false
                     return
                 }
-                let snapTransition = ComponentTransition.easeInOut(duration: 0.15)
-                snapTransition.setFrame(view: self.selectionView, frame: targetFrame) { completed in
+
+                expandedSelectionView.layer.removeAnimation(forKey: "decayBoundsAnimation")
+                expandedSelectionView.layer.removeAnimation(forKey: "decayCornerRadiusAnimation")
+
+                let collapseTransition = ComponentTransition.spring(duration: 0.3)
+                collapseTransition.setFrame(view: self.expandedSelectionView, frame: targetFrame) { completed in
                     guard completed else { return }
                     hoveredItem.action(false)
                 }
-                self.isDraggingSelector = false
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-//                    hoveredItem.action(false)
-//                }
+                collapseTransition.setFrame(view: self.collapsedSelectionView, frame: targetFrame)
+                collapseTransition.setAlpha(view: self.expandedSelectionView, alpha: 0)
+                collapseTransition.setAlpha(view: self.collapsedSelectionView, alpha: 1)
+                collapseTransition.setCornerRadius(layer: expandedSelectionView.layer, cornerRadius: targetFrame.height * 0.5)
 
-                isDraggingSelector = false
-                selectionConfirmTimer?.invalidate()
-                selectionConfirmTimer = nil
+                self.isDraggingSelector = false
+                self.selectionConfirmTimer?.invalidate()
+                self.selectionConfirmTimer = nil
             }
         }
 
@@ -515,7 +623,8 @@ public final class TabBarComponent: Component {
             
             var itemSize = CGSize(width: floor((availableSize.width - innerInset * 2.0) / CGFloat(component.items.count)), height: 56.0)
             itemSize.width = min(94.0, itemSize.width)
-            
+            self.itemSize = itemSize
+
             if let itemContainer = nativeItemContainers[0] {
                 itemSize = itemContainer.bounds.size
             }
@@ -523,11 +632,11 @@ public final class TabBarComponent: Component {
             let contentHeight = itemSize.height + innerInset * 2.0
             var contentWidth: CGFloat = innerInset
             
-            if self.selectionView.image?.size.height != itemSize.height {
-                self.selectionView.image = generateStretchableFilledCircleImage(radius: itemSize.height * 0.5, color: .white)?.withRenderingMode(.alwaysTemplate)
+            if self.collapsedSelectionView.image?.size.height != itemSize.height {
+                self.collapsedSelectionView.image = generateStretchableFilledCircleImage(radius: itemSize.height * 0.5, color: .white)?.withRenderingMode(.alwaysTemplate)
             }
-            self.selectionView.tintColor = component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
-            
+            self.collapsedSelectionView.tintColor = component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
+
             var validIds: [AnyHashable] = []
             var selectionFrame: CGRect?
             for index in 0 ..< component.items.count {
@@ -631,13 +740,16 @@ public final class TabBarComponent: Component {
             
             if !self.isDraggingSelector, let selectionFrame, self.nativeTabBar == nil {
                 var selectionViewTransition = transition
-                if self.selectionView.superview == nil {
+                if self.collapsedSelectionView.superview == nil {
                     selectionViewTransition = selectionViewTransition.withAnimation(.none)
-                    self.backgroundView.contentView.addSubview(self.selectionView)
+                    self.backgroundView.contentView.addSubview(self.collapsedSelectionView)
+                    self.backgroundView.contentView.addSubview(self.expandedSelectionView)
                 }
-                selectionViewTransition.setFrame(view: self.selectionView, frame: selectionFrame)
-            } else if !self.isDraggingSelector, self.selectionView.superview != nil {
-                self.selectionView.removeFromSuperview()
+                selectionViewTransition.setFrame(view: self.collapsedSelectionView, frame: selectionFrame)
+                selectionViewTransition.setFrame(view: self.expandedSelectionView, frame: selectionFrame)
+            } else if !self.isDraggingSelector, self.collapsedSelectionView.superview != nil {
+                self.collapsedSelectionView.removeFromSuperview()
+                self.expandedSelectionView.removeFromSuperview()
             }
             
             let size = CGSize(width: min(availableSize.width, contentWidth), height: contentHeight)
