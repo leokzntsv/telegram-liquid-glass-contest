@@ -78,20 +78,113 @@ public final class TabBarComponent: Component {
     }
     
     public final class View: UIView, UITabBarDelegate, UIGestureRecognizerDelegate {
-        private final class BlurredSelectionView: UIView {
+        private final class BlurredSelectionView: UIVisualEffectView {
+            private let maxBlurRadius: CGFloat
+
             override func layoutSubviews() {
                 super.layoutSubviews()
                 layer.cornerRadius = bounds.height * 0.5
             }
 
-            override init(frame: CGRect) {
-                super.init(frame: frame)
+            override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+                super.traitCollectionDidChange(previousTraitCollection)
+                if #available(iOS 13.0, *),
+                   traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+                    resetEffect()
+                    if self.subviews.indices.contains(1) {
+                        let tintOverlayView = subviews[1]
+                        tintOverlayView.alpha = 0
+                    }
+                }
+            }
+
+            init(maxBlurRadius: CGFloat = 20) {
+                self.maxBlurRadius = maxBlurRadius
+                super.init(effect: UIBlurEffect(style: .light))
                 clipsToBounds = true
                 layer.cornerRadius = bounds.height * 0.5
+                resetEffect()
+                if self.subviews.indices.contains(1) {
+                    let tintOverlayView = subviews[1]
+                    tintOverlayView.alpha = 0
+                }
             }
 
             required public init?(coder: NSCoder) {
                 fatalError("init(coder:) has not been implemented")
+            }
+
+            private func resetEffect() {
+                let filterClassStringEncoded = "Q0FGaWx0ZXI="
+                let filterClassString: String = {
+                    if let data = Data(base64Encoded: filterClassStringEncoded),
+                       let string = String(data: data, encoding: .utf8) {
+                        return string
+                    }
+                    return ""
+                }()
+                let filterWithTypeStringEncoded = "ZmlsdGVyV2l0aFR5cGU6"
+                let filterWithTypeString: String = {
+                    if let data = Data(base64Encoded: filterWithTypeStringEncoded),
+                       let string = String(data: data, encoding: .utf8) {
+                        return string
+                    }
+                    return ""
+                }()
+
+                let filterWithTypeSelector = Selector(filterWithTypeString)
+
+                guard let filterClass = NSClassFromString(filterClassString) as AnyObject as? NSObjectProtocol,
+                      filterClass.responds(to: filterWithTypeSelector) else {
+                    return
+                }
+
+                let result = filterClass.perform(filterWithTypeSelector, with: "variableBlur")
+                guard let variableBlur = result?.takeUnretainedValue() as? NSObject else {
+                    return
+                }
+
+                variableBlur.setValue(maxBlurRadius, forKey: "inputRadius")
+                variableBlur.setValue(true, forKey: "inputNormalizeEdges")
+
+                if let maskImage = makeRadialGradientMask(size: CGSize(width: 64, height: 64)) {
+                    variableBlur.setValue(maskImage, forKey: "inputMaskImage")
+                }
+
+                if let backdropLayer = subviews.first?.layer {
+                    backdropLayer.filters = [variableBlur]
+                    backdropLayer.setValue(UIScreen.main.scale, forKey: "scale")
+                }
+            }
+
+            private func makeRadialGradientMask(size: CGSize) -> CGImage? {
+                let rendererFormat = UIGraphicsImageRendererFormat()
+                rendererFormat.scale = UIScreen.main.scale
+                let renderer = UIGraphicsImageRenderer(size: size, format: rendererFormat)
+                let image = renderer.image { context in
+                    let cgContext = context.cgContext
+
+                    cgContext.saveGState()
+                    cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
+                    cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
+                    cgContext.clear(CGRect(origin: .zero, size: size))
+
+                    let colors = [
+                        UIColor.white.withAlphaComponent(0).cgColor,
+                        UIColor.white.withAlphaComponent(0).cgColor,
+                        UIColor.white.withAlphaComponent(0).cgColor,
+                        UIColor.white.withAlphaComponent(0).cgColor,
+                        UIColor.white.withAlphaComponent(0.2).cgColor,
+                        UIColor.white.withAlphaComponent(0.3).cgColor
+                    ] as CFArray
+                    guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.25, 0.5, 0.75, 0.9, 1]) else {
+                        return
+                    }
+
+                    cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
+                    cgContext.restoreGState()
+                }
+                return image.cgImage
             }
         }
 
@@ -118,7 +211,6 @@ public final class TabBarComponent: Component {
             self.collapsedSelectionView = GlassBackgroundView.ContentImageView()
             self.expandedSelectionView = BlurredSelectionView()
             self.expandedSelectionView.alpha = 0
-            self.expandedSelectionView.backgroundColor = .systemBlue
 
             self.contextGestureContainerView = ContextControllerSourceView()
             self.contextGestureContainerView.isGestureEnabled = true
@@ -370,8 +462,8 @@ public final class TabBarComponent: Component {
         private let smoothingFactor: CGFloat = 0.85
 
         private var itemSize: CGSize?
-        private let heightDiff: CGFloat = 14
-        private let widthDiff: CGFloat = 14
+        private let heightDiff: CGFloat = 24
+        private let widthDiff: CGFloat = 20
 
         @objc private func onPanGesture(_ recognizer: UIPanGestureRecognizer) {
             guard let component = self.component, let collapsedSize = itemSize else {
@@ -387,6 +479,8 @@ public final class TabBarComponent: Component {
             let clampedX = max(leftLimit, min(rightLimit, point.x))
 
             if recognizer.state == .began {
+                expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
+
                 isDraggingSelector = true
                 smoothedSpeed = 0
                 lastSmoothedSpeed = 0
@@ -465,8 +559,7 @@ public final class TabBarComponent: Component {
                 let increasing = lastSmoothedSpeed == 0 || smoothedSpeed > lastSmoothedSpeed + 15
 
                 if increasing {
-                    expandedSelectionView.layer.removeAnimation(forKey: "decayBoundsAnimation")
-                    expandedSelectionView.layer.removeAnimation(forKey: "decayCornerRadiusAnimation")
+                    expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
 
                     let baseSize = CGSize(width: expandedSize.width, height: expandedSize.height)
 
@@ -476,41 +569,36 @@ public final class TabBarComponent: Component {
                     let targetHeight = baseSize.height * (1 + deformAmount)
                     let targetWidth = baseSize.width / (1 + deformAmount)
 
-                    let presLayer = expandedSelectionView.layer.presentation() ?? expandedSelectionView.layer
-                    let currentBounds = presLayer.bounds
+                    let presentation = expandedSelectionView.layer.presentation() ?? expandedSelectionView.layer
+
+                    let currentScaleY = presentation.value(forKeyPath: "transform.scale.y") as? CGFloat ?? 1
+                    let currentScaleX = presentation.value(forKeyPath: "transform.scale.x") as? CGFloat ?? 1
+
+                    let currentHeight = expandedSize.height * currentScaleY
+                    let currentWidth = expandedSize.width * currentScaleX
 
                     let lerp: CGFloat = 0.2
-                    let newHeight = max(expandedSize.height, currentBounds.height + (targetHeight - currentBounds.height) * lerp)
-                    let newWidth = min(expandedSize.width, currentBounds.width + (targetWidth - currentBounds.width) * lerp)
+                    let newHeight = max(expandedSize.height, currentHeight + (targetHeight - currentHeight) * lerp)
+                    let newWidth = min(expandedSize.width, currentWidth + (targetWidth - currentWidth) * lerp)
 
-                    expandedSelectionView.bounds.size = CGSize(width: newWidth, height: newHeight)
-                    expandedSelectionView.layer.cornerRadius = newHeight * 0.5
+                    let scaleY = newHeight / expandedSize.height
+                    let scaleX = newWidth / expandedSize.width
+
+                    expandedSelectionView.layer.setAffineTransform(CGAffineTransform(scaleX: scaleX, y: scaleY))
                 } else {
-                    if expandedSelectionView.layer.animation(forKey: "decayBoundsAnimation") == nil || expandedSelectionView.layer.animation(forKey: "decayCornerRadiusAnimation") == nil {
+                    if expandedSelectionView.layer.animation(forKey: "decayTransformAnimation") == nil {
                         let presentation = expandedSelectionView.layer.presentation() ?? expandedSelectionView.layer
-                        let baseSize = CGSize(width: expandedSize.width, height: expandedSize.height)
-                        let baseCornerRadius = expandedSize.height * 0.5
 
-                        let boundsSpring = CASpringAnimation(keyPath: "bounds.size")
-                        boundsSpring.fromValue = presentation.bounds.size
-                        boundsSpring.toValue = baseSize
-                        boundsSpring.damping = 12
-                        boundsSpring.stiffness = 180
-                        boundsSpring.mass = 1
-                        boundsSpring.duration = boundsSpring.settlingDuration
+                        let transformSpring = CASpringAnimation(keyPath: "transform")
+                        transformSpring.fromValue = presentation.transform
+                        transformSpring.toValue = CATransform3DIdentity
+                        transformSpring.damping = 12
+                        transformSpring.stiffness = 180
+                        transformSpring.mass = 1
+                        transformSpring.duration = transformSpring.settlingDuration
 
-                        let cornerRadiusSpring = CASpringAnimation(keyPath: "cornerRadius")
-                        cornerRadiusSpring.fromValue = presentation.cornerRadius
-                        cornerRadiusSpring.toValue = baseCornerRadius
-                        cornerRadiusSpring.damping = 12
-                        cornerRadiusSpring.stiffness = 180
-                        cornerRadiusSpring.mass = 1
-                        cornerRadiusSpring.duration = cornerRadiusSpring.settlingDuration
-
-                        expandedSelectionView.bounds.size = baseSize
-                        expandedSelectionView.layer.cornerRadius = baseCornerRadius
-                        expandedSelectionView.layer.add(boundsSpring, forKey: "decayBoundsAnimation")
-                        expandedSelectionView.layer.add(cornerRadiusSpring, forKey: "decayCornerRadiusAnimation")
+                        expandedSelectionView.transform = .identity
+                        expandedSelectionView.layer.add(transformSpring, forKey: "decayTransformAnimation")
                     }
                 }
 
@@ -523,17 +611,16 @@ public final class TabBarComponent: Component {
                     return
                 }
 
-                expandedSelectionView.layer.removeAnimation(forKey: "decayBoundsAnimation")
-                expandedSelectionView.layer.removeAnimation(forKey: "decayCornerRadiusAnimation")
+                expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
 
                 let collapseTransition = ComponentTransition.spring(duration: 0.3)
-                collapseTransition.setFrame(view: self.expandedSelectionView, frame: targetFrame) { completed in
+                collapseTransition.setFrame(view: expandedSelectionView, frame: targetFrame) { completed in
                     guard completed else { return }
                     hoveredItem.action(false)
                 }
-                collapseTransition.setFrame(view: self.collapsedSelectionView, frame: targetFrame)
-                collapseTransition.setAlpha(view: self.expandedSelectionView, alpha: 0)
-                collapseTransition.setAlpha(view: self.collapsedSelectionView, alpha: 1)
+                collapseTransition.setFrame(view: collapsedSelectionView, frame: targetFrame)
+                collapseTransition.setAlpha(view: expandedSelectionView, alpha: 0)
+                collapseTransition.setAlpha(view: collapsedSelectionView, alpha: 1)
                 collapseTransition.setCornerRadius(layer: expandedSelectionView.layer, cornerRadius: targetFrame.height * 0.5)
 
                 self.isDraggingSelector = false
@@ -743,15 +830,16 @@ public final class TabBarComponent: Component {
                 if self.collapsedSelectionView.superview == nil {
                     selectionViewTransition = selectionViewTransition.withAnimation(.none)
                     self.backgroundView.contentView.addSubview(self.collapsedSelectionView)
-                    self.backgroundView.contentView.addSubview(self.expandedSelectionView)
+                    self.contextGestureContainerView.addSubview(self.expandedSelectionView)
                 }
+                self.contextGestureContainerView.bringSubviewToFront(self.expandedSelectionView)
                 selectionViewTransition.setFrame(view: self.collapsedSelectionView, frame: selectionFrame)
                 selectionViewTransition.setFrame(view: self.expandedSelectionView, frame: selectionFrame)
             } else if !self.isDraggingSelector, self.collapsedSelectionView.superview != nil {
                 self.collapsedSelectionView.removeFromSuperview()
                 self.expandedSelectionView.removeFromSuperview()
             }
-            
+
             let size = CGSize(width: min(availableSize.width, contentWidth), height: contentHeight)
             
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
