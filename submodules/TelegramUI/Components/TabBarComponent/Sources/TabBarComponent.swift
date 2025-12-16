@@ -200,9 +200,12 @@ public final class TabBarComponent: Component {
         private let collapsedSelectionView: GlassBackgroundView.ContentImageView
         private let expandedSelectionView: BlurredSelectionView
 
+        private let selectedItemsContainerView: UIView
+        private let expandedSelectionMaskView: UIView
+
         private let contextGestureContainerView: ContextControllerSourceView
         private let nativeTabBar: UITabBar?
-        
+
         private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
         private var selectedItemViews: [AnyHashable: ComponentView<Empty>] = [:]
         
@@ -220,9 +223,16 @@ public final class TabBarComponent: Component {
             self.expandedSelectionView = BlurredSelectionView(maxBlurRadius: 7)
             self.expandedSelectionView.alpha = 0
 
+            self.selectedItemsContainerView = UIView()
+            self.selectedItemsContainerView.isUserInteractionEnabled = false
+            self.expandedSelectionMaskView = UIView()
+            self.expandedSelectionMaskView.backgroundColor = .white
+            self.expandedSelectionMaskView.isUserInteractionEnabled = false
+            self.selectedItemsContainerView.mask = self.expandedSelectionMaskView
+
             self.contextGestureContainerView = ContextControllerSourceView()
             self.contextGestureContainerView.isGestureEnabled = true
-            
+
             if #available(iOS 26.0, *) {
                 let nativeTabBar = UITabBar()
                 self.nativeTabBar = nativeTabBar
@@ -488,6 +498,7 @@ public final class TabBarComponent: Component {
 
             if recognizer.state == .began {
                 expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
+                expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
 
                 isDraggingSelector = true
                 smoothedSpeed = 0
@@ -500,10 +511,12 @@ public final class TabBarComponent: Component {
 
                 let expandTransition = ComponentTransition.spring(duration: 0.2)
                 expandTransition.setFrame(view: expandedSelectionView, frame: frame)
+                expandTransition.setFrame(view: expandedSelectionMaskView, frame: frame)
                 expandTransition.setFrame(view: collapsedSelectionView, frame: frame)
                 expandTransition.setAlpha(view: expandedSelectionView, alpha: 1)
                 expandTransition.setAlpha(view: collapsedSelectionView, alpha: 0)
                 expandTransition.setCornerRadius(layer: expandedSelectionView.layer, cornerRadius: expandedSize.height * 0.5)
+                expandTransition.setCornerRadius(layer: expandedSelectionMaskView.layer, cornerRadius: expandedSize.height * 0.5)
             }
 
             var closestItemView: (AnyHashable, CGFloat)?
@@ -543,9 +556,6 @@ public final class TabBarComponent: Component {
                             strongSelf.selectionConfirmTimer = nil
 
                             hoveredItem.action(.pan)
-                            if let componentView = strongSelf.itemViews[hoveredItem.id], let itemView = componentView.view as? ItemComponent.View {
-                                itemView.playSelectionAnimation()
-                            }
                         }
                     }, queue: Queue.mainQueue())
                     self.selectionConfirmTimer = selectionConfirmTimer
@@ -555,10 +565,12 @@ public final class TabBarComponent: Component {
 
             if recognizer.state == .changed {
                 expandedSelectionView.layer.removeAnimation(forKey: "position")
+                expandedSelectionMaskView.layer.removeAnimation(forKey: "position")
 
                 var center = expandedSelectionView.center
                 center.x = clampedX
                 expandedSelectionView.center = center
+                expandedSelectionMaskView.center = center
                 collapsedSelectionView.center = center
 
                 let rawSpeed = abs(recognizer.velocity(in: self).x)
@@ -568,6 +580,7 @@ public final class TabBarComponent: Component {
 
                 if increasing {
                     expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
+                    expandedSelectionMaskView.layer.removeAnimation(forKey: "decayTransformAnimation")
 
                     let baseSize = CGSize(width: expandedSize.width, height: expandedSize.height)
 
@@ -593,6 +606,7 @@ public final class TabBarComponent: Component {
                     let scaleX = newWidth / expandedSize.width
 
                     expandedSelectionView.layer.setAffineTransform(CGAffineTransform(scaleX: scaleX, y: scaleY))
+                    expandedSelectionMaskView.layer.setAffineTransform(CGAffineTransform(scaleX: scaleX, y: scaleY))
                 } else {
                     if expandedSelectionView.layer.animation(forKey: "decayTransformAnimation") == nil {
                         let presentation = expandedSelectionView.layer.presentation() ?? expandedSelectionView.layer
@@ -607,6 +621,8 @@ public final class TabBarComponent: Component {
 
                         expandedSelectionView.transform = .identity
                         expandedSelectionView.layer.add(transformSpring, forKey: "decayTransformAnimation")
+                        expandedSelectionMaskView.transform = .identity
+                        expandedSelectionMaskView.layer.add(transformSpring, forKey: "decayTransformAnimation")
                     }
                 }
 
@@ -620,16 +636,19 @@ public final class TabBarComponent: Component {
                 }
 
                 expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
+                expandedSelectionMaskView.layer.removeAnimation(forKey: "decayTransformAnimation")
 
                 let collapseTransition = ComponentTransition.spring(duration: 0.3)
                 collapseTransition.setFrame(view: expandedSelectionView, frame: targetFrame) { completed in
                     guard completed else { return }
                     hoveredItem.action(.pan)
                 }
+                collapseTransition.setFrame(view: expandedSelectionMaskView, frame: targetFrame)
                 collapseTransition.setFrame(view: collapsedSelectionView, frame: targetFrame)
                 collapseTransition.setAlpha(view: expandedSelectionView, alpha: 0)
                 collapseTransition.setAlpha(view: collapsedSelectionView, alpha: 1)
                 collapseTransition.setCornerRadius(layer: expandedSelectionView.layer, cornerRadius: targetFrame.height * 0.5)
+                collapseTransition.setCornerRadius(layer: expandedSelectionMaskView.layer, cornerRadius: targetFrame.height * 0.5)
 
                 self.isDraggingSelector = false
                 self.selectionConfirmTimer?.invalidate()
@@ -764,7 +783,7 @@ public final class TabBarComponent: Component {
                     component: AnyComponent(ItemComponent(
                         item: item,
                         theme: component.theme,
-                        isSelected: self.nativeTabBar == nil ? isItemSelected : false
+                        isSelected: false
                     )),
                     environment: {},
                     containerSize: itemSize
@@ -795,6 +814,7 @@ public final class TabBarComponent: Component {
                             }
                         } else {
                             self.contextGestureContainerView.addSubview(itemComponentView)
+                            self.selectedItemsContainerView.addSubview(selectedItemComponentView)
                         }
                     }
                     if self.nativeTabBar != nil {
@@ -805,6 +825,7 @@ public final class TabBarComponent: Component {
                         }
                     } else {
                         itemTransition.setFrame(view: itemComponentView, frame: itemFrame)
+                        itemTransition.setFrame(view: selectedItemComponentView, frame: itemFrame)
                     }
                     
                     if let previousComponent, previousComponent.selectedId != item.id, isItemSelected {
@@ -819,7 +840,7 @@ public final class TabBarComponent: Component {
                 contentWidth += itemFrame.width
             }
             contentWidth += innerInset
-            
+
             var removeIds: [AnyHashable] = []
             for (id, itemView) in self.itemViews {
                 if !validIds.contains(id) {
@@ -832,7 +853,11 @@ public final class TabBarComponent: Component {
                 self.itemViews.removeValue(forKey: id)
                 self.selectedItemViews.removeValue(forKey: id)
             }
-            
+
+            if self.selectedItemsContainerView.superview == nil {
+                self.contextGestureContainerView.addSubview(self.selectedItemsContainerView)
+            }
+
             if !self.isDraggingSelector, let selectionFrame, self.nativeTabBar == nil {
                 var selectionViewTransition = transition
                 if self.collapsedSelectionView.superview == nil {
@@ -840,13 +865,16 @@ public final class TabBarComponent: Component {
                     self.backgroundView.contentView.addSubview(self.collapsedSelectionView)
                     self.contextGestureContainerView.addSubview(self.expandedSelectionView)
                 }
-                self.contextGestureContainerView.bringSubviewToFront(self.expandedSelectionView)
                 selectionViewTransition.setFrame(view: self.collapsedSelectionView, frame: selectionFrame)
                 selectionViewTransition.setFrame(view: self.expandedSelectionView, frame: selectionFrame)
+                selectionViewTransition.setFrame(view: self.expandedSelectionMaskView, frame: selectionFrame)
             } else if !self.isDraggingSelector, self.collapsedSelectionView.superview != nil {
                 self.collapsedSelectionView.removeFromSuperview()
                 self.expandedSelectionView.removeFromSuperview()
+                self.expandedSelectionMaskView.removeFromSuperview()
             }
+
+            self.contextGestureContainerView.bringSubviewToFront(self.expandedSelectionView)
 
             let size = CGSize(width: min(availableSize.width, contentWidth), height: contentHeight)
             
