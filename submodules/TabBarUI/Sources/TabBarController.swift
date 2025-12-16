@@ -83,7 +83,9 @@ open class TabBarControllerImpl: ViewController, TabBarController {
             }
         }
     }
-    
+
+    private var skipNextSelectionAnimation: Bool = false
+
     public var currentController: ViewController?
     
     override public var transitionNavigationBar: NavigationBar? {
@@ -152,9 +154,9 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     override open func loadDisplayNode() {
-        self.displayNode = TabBarControllerNode(theme: self.theme, itemSelected: { [weak self] index, longTap, itemNodes in
+        self.displayNode = TabBarControllerNode(theme: self.theme, itemSelected: { [weak self] index, method, itemNodes in
             if let strongSelf = self {
-                if longTap, let controller = strongSelf.controllers[index] as? TabBarContainedController {
+                if case .longTap = method, let controller = strongSelf.controllers[index] as? TabBarContainedController {
                     controller.presentTabBarPreviewingController(sourceNodes: itemNodes)
                     return
                 }
@@ -205,14 +207,19 @@ open class TabBarControllerImpl: ViewController, TabBarController {
                         
                         if strongSelf.selectedIndex == index {
                             if let controller = strongSelf.currentController {
-                                if longTap {
+                                switch method {
+                                case .longTap:
                                     controller.longTapWithTabBar?()
-                                } else {
+                                case .tap:
                                     controller.scrollToTopWithTabBar?()
+                                case .pan:
+                                    break
                                 }
                             }
                         } else {
+                            strongSelf.skipNextSelectionAnimation = method == .pan
                             strongSelf.selectedIndex = index
+                            strongSelf.skipNextSelectionAnimation = false
                         }
                     }
                 }))
@@ -252,8 +259,10 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         var animated = animated
         if let layout = self.validLayout, case .regular = layout.metrics.widthClass {
             animated = false
+        } else if skipNextSelectionAnimation {
+            animated = false
         }
-        
+
         let tabBarSelectedIndex = self.selectedIndex
         self.tabBarControllerNode.updateSelectedIndex(index: tabBarSelectedIndex)
         

@@ -51,7 +51,7 @@ final class TabBarControllerNode: ASDisplayNode {
     }
     
     private var theme: PresentationTheme
-    private let itemSelected: (Int, Bool, [ASDisplayNode]) -> Void
+    private let itemSelected: (Int, TabBarComponent.Item.ActionTriggerMethod, [ASDisplayNode]) -> Void
     private let contextAction: (Int, ContextExtractedContentContainingView, ContextGesture) -> Void
     
     private let tabBarView = ComponentView<Empty>()
@@ -95,7 +95,7 @@ final class TabBarControllerNode: ASDisplayNode {
         }
     }
     
-    init(theme: PresentationTheme, itemSelected: @escaping (Int, Bool, [ASDisplayNode]) -> Void, contextAction: @escaping (Int, ContextExtractedContentContainingView, ContextGesture) -> Void, swipeAction: @escaping (Int, TabBarItemSwipeDirection) -> Void, toolbarActionSelected: @escaping (ToolbarActionOption) -> Void, disabledPressed: @escaping () -> Void) {
+    init(theme: PresentationTheme, itemSelected: @escaping (Int, TabBarComponent.Item.ActionTriggerMethod, [ASDisplayNode]) -> Void, contextAction: @escaping (Int, ContextExtractedContentContainingView, ContextGesture) -> Void, swipeAction: @escaping (Int, TabBarItemSwipeDirection) -> Void, toolbarActionSelected: @escaping (ToolbarActionOption) -> Void, disabledPressed: @escaping () -> Void) {
         self.theme = theme
         self.itemSelected = itemSelected
         self.contextAction = contextAction
@@ -212,12 +212,12 @@ final class TabBarControllerNode: ASDisplayNode {
                     let itemId = AnyHashable(ObjectIdentifier(item.item))
                     return TabBarComponent.Item(
                         item: item.item,
-                        action: { [weak self] isLongTap in
+                        action: { [weak self] method in
                             guard let self else {
                                 return
                             }
                             if let index = self.tabBarItems.firstIndex(where: { AnyHashable(ObjectIdentifier($0.item)) == itemId }) {
-                                self.itemSelected(index, isLongTap, [])
+                                self.itemSelected(index, method, [])
                             }
                         },
                         contextAction: { [weak self] gesture, sourceView in

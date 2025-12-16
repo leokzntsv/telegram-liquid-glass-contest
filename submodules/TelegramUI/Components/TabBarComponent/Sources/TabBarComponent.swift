@@ -14,15 +14,21 @@ import TextBadgeComponent
 
 public final class TabBarComponent: Component {
     public final class Item: Equatable {
+        public enum ActionTriggerMethod {
+            case tap
+            case longTap
+            case pan
+        }
+
         public let item: UITabBarItem
-        public let action: (Bool) -> Void
+        public let action: (ActionTriggerMethod) -> Void
         public let contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?
         
         fileprivate var id: AnyHashable {
             return AnyHashable(ObjectIdentifier(self.item))
         }
         
-        public init(item: UITabBarItem, action: @escaping (Bool) -> Void, contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?) {
+        public init(item: UITabBarItem, action: @escaping (ActionTriggerMethod) -> Void, contextAction: ((ContextGesture, ContextExtractedContentContainingView) -> Void)?) {
             self.item = item
             self.action = action
             self.contextAction = contextAction
@@ -393,7 +399,7 @@ public final class TabBarComponent: Component {
             }
             if let index = tabBar.items?.firstIndex(where: { $0 === item }) {
                 if index < component.items.count {
-                    component.items[index].action(false)
+                    component.items[index].action(.tap)
                 }
             }
         }
@@ -446,7 +452,7 @@ public final class TabBarComponent: Component {
                     guard let item = component.items.first(where: { $0.id == id }) else {
                         return
                     }
-                    item.action(false)
+                    item.action(.tap)
                     /*if previousSelectedIndex != closestNode.0 {
                      if let selectedIndex = self.selectedIndex, let _ = self.tabBarItems[selectedIndex].item.animationName {
                      container.imageNode.animationNode.play(firstFrame: false, fromIndex: nil)
@@ -536,7 +542,7 @@ public final class TabBarComponent: Component {
                             strongSelf.selectionConfirmTimer?.invalidate()
                             strongSelf.selectionConfirmTimer = nil
 
-                            hoveredItem.action(false)
+                            hoveredItem.action(.pan)
                             if let componentView = strongSelf.itemViews[hoveredItem.id], let itemView = componentView.view as? ItemComponent.View {
                                 itemView.playSelectionAnimation()
                             }
@@ -618,7 +624,7 @@ public final class TabBarComponent: Component {
                 let collapseTransition = ComponentTransition.spring(duration: 0.3)
                 collapseTransition.setFrame(view: expandedSelectionView, frame: targetFrame) { completed in
                     guard completed else { return }
-                    hoveredItem.action(false)
+                    hoveredItem.action(.pan)
                 }
                 collapseTransition.setFrame(view: collapsedSelectionView, frame: targetFrame)
                 collapseTransition.setAlpha(view: expandedSelectionView, alpha: 0)
