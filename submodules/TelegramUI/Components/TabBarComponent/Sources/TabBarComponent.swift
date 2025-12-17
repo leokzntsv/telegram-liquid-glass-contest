@@ -178,16 +178,16 @@ public final class TabBarComponent: Component {
                         cgContext.clear(CGRect(origin: .zero, size: size))
 
                         let colors = [
-                            UIColor.white.withAlphaComponent(0.02).cgColor,
-                            UIColor.white.withAlphaComponent(0.02).cgColor,
-                            UIColor.white.withAlphaComponent(0.02).cgColor,
-                            UIColor.white.withAlphaComponent(0.02).cgColor,
-                            UIColor.white.withAlphaComponent(0.05).cgColor,
+                            UIColor.white.withAlphaComponent(0).cgColor,
+                            UIColor.white.withAlphaComponent(0).cgColor,
+                            UIColor.white.withAlphaComponent(0).cgColor,
+                            UIColor.white.withAlphaComponent(0).cgColor,
+                            UIColor.white.withAlphaComponent(0.1).cgColor,
                             UIColor.white.withAlphaComponent(0.2).cgColor,
                             UIColor.white.withAlphaComponent(0.3).cgColor,
-                            UIColor.white.withAlphaComponent(0.35).cgColor
+                            UIColor.white.withAlphaComponent(0.4).cgColor,
                         ] as CFArray
-                        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.25, 0.5, 0.7, 0.75, 0.85, 0.95, 1]) else {
+                        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.25, 0.5, 0.65, 0.75, 0.85, 0.95, 1]) else {
                             return
                         }
 
@@ -384,7 +384,7 @@ public final class TabBarComponent: Component {
         public override init(frame: CGRect) {
             self.backgroundView = GlassBackgroundView()
             self.collapsedSelectionView = GlassBackgroundView.ContentImageView()
-            self.expandedSelectionView = BlurredSelectionView(maxBlurRadius: 7)
+            self.expandedSelectionView = BlurredSelectionView(maxBlurRadius: 12)
             self.expandedSelectionView.alpha = 0
 
             self.selectedItemsContainerView = UIView()
