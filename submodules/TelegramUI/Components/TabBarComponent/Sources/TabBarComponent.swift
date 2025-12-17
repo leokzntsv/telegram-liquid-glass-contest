@@ -650,8 +650,8 @@ public final class TabBarComponent: Component {
         private var smoothedSpeed: CGFloat = 0
         private var lastSmoothedSpeed: CGFloat = 0
         private var deformAmount: CGFloat = 0
-        private let maxDeform: CGFloat = 0.3
-        private let speedForMaxDeform: CGFloat = 3000
+        private let maxDeform: CGFloat = 0.25
+        private let speedForMaxDeform: CGFloat = 1000
         private let smoothingFactor: CGFloat = 0.85
 
         private var itemSize: CGSize?
@@ -733,18 +733,18 @@ public final class TabBarComponent: Component {
                 hoveredItem?.action(.pan)
             }
 
-            if recognizer.state == .changed  && isHoveredUpdated {
-                self.selectionConfirmTimer?.invalidate()
-                let selectionConfirmTimer = SwiftSignalKit.Timer(timeout: 0.2, repeat: false, completion: { [weak self] in
-                    if let strongSelf = self, let hoveredItem, strongSelf.component?.hoveredId == hoveredItem.id {
-                        strongSelf.selectionConfirmTimer?.invalidate()
-                        strongSelf.selectionConfirmTimer = nil
-
-                        hoveredItem.action(.pan)
-                    }
-                }, queue: Queue.mainQueue())
-                self.selectionConfirmTimer = selectionConfirmTimer
-                selectionConfirmTimer.start()
+            if recognizer.state == .changed && isHoveredUpdated {
+//                self.selectionConfirmTimer?.invalidate()
+//                let selectionConfirmTimer = SwiftSignalKit.Timer(timeout: 0.2, repeat: false, completion: { [weak self] in
+//                    if let strongSelf = self, let hoveredItem, strongSelf.component?.hoveredId == hoveredItem.id {
+//                        strongSelf.selectionConfirmTimer?.invalidate()
+//                        strongSelf.selectionConfirmTimer = nil
+//
+//                        hoveredItem.action(.pan)
+//                    }
+//                }, queue: Queue.mainQueue())
+//                self.selectionConfirmTimer = selectionConfirmTimer
+//                selectionConfirmTimer.start()
             }
 
             if recognizer.state == .changed {
@@ -799,9 +799,9 @@ public final class TabBarComponent: Component {
                         let transformSpring = CASpringAnimation(keyPath: "transform")
                         transformSpring.fromValue = presentation.transform
                         transformSpring.toValue = CATransform3DIdentity
-                        transformSpring.damping = 12
-                        transformSpring.stiffness = 180
-                        transformSpring.mass = 1
+                        transformSpring.damping = 12.0 //16
+                        transformSpring.stiffness = 280.0 //551
+                        transformSpring.mass = 1.0
                         transformSpring.duration = transformSpring.settlingDuration
 
                         expandedSelectionView.transform = .identity
