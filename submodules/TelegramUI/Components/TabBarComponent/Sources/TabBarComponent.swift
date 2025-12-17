@@ -729,20 +729,22 @@ public final class TabBarComponent: Component {
                 hoveredItem = item
             }
 
-            if recognizer.state == .began || recognizer.state == .changed {
-                if isHoveredUpdated {
-                    self.selectionConfirmTimer?.invalidate()
-                    let selectionConfirmTimer = SwiftSignalKit.Timer(timeout: 0.2, repeat: false, completion: { [weak self] in
-                        if let strongSelf = self, let hoveredItem, strongSelf.component?.hoveredId == hoveredItem.id {
-                            strongSelf.selectionConfirmTimer?.invalidate()
-                            strongSelf.selectionConfirmTimer = nil
+            if recognizer.state == .began && isHoveredUpdated {
+                hoveredItem?.action(.pan)
+            }
 
-                            hoveredItem.action(.pan)
-                        }
-                    }, queue: Queue.mainQueue())
-                    self.selectionConfirmTimer = selectionConfirmTimer
-                    selectionConfirmTimer.start()
-                }
+            if recognizer.state == .changed  && isHoveredUpdated {
+                self.selectionConfirmTimer?.invalidate()
+                let selectionConfirmTimer = SwiftSignalKit.Timer(timeout: 0.2, repeat: false, completion: { [weak self] in
+                    if let strongSelf = self, let hoveredItem, strongSelf.component?.hoveredId == hoveredItem.id {
+                        strongSelf.selectionConfirmTimer?.invalidate()
+                        strongSelf.selectionConfirmTimer = nil
+
+                        hoveredItem.action(.pan)
+                    }
+                }, queue: Queue.mainQueue())
+                self.selectionConfirmTimer = selectionConfirmTimer
+                selectionConfirmTimer.start()
             }
 
             if recognizer.state == .changed {
