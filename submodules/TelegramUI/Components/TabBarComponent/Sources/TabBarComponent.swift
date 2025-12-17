@@ -84,115 +84,279 @@ public final class TabBarComponent: Component {
     }
     
     public final class View: UIView, UITabBarDelegate, UIGestureRecognizerDelegate {
-        private final class BlurredSelectionView: UIVisualEffectView {
-            private let maxBlurRadius: CGFloat
+        private final class BlurredSelectionView: UIView {
+            private final class BlurView: UIVisualEffectView {
+                private let maxBlurRadius: CGFloat
 
-            override func layoutSubviews() {
-                super.layoutSubviews()
-                layer.cornerRadius = bounds.height * 0.5
-            }
+                override func layoutSubviews() {
+                    super.layoutSubviews()
+                    layer.cornerRadius = bounds.height * 0.5
+                    resetEffect()
+                }
 
-            override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-                super.traitCollectionDidChange(previousTraitCollection)
-                if #available(iOS 13.0, *),
-                   traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+                override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+                    super.traitCollectionDidChange(previousTraitCollection)
+                    if #available(iOS 13.0, *),
+                       traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+                        resetEffect()
+                        if self.subviews.indices.contains(1) {
+                            let tintOverlayView = subviews[1]
+                            tintOverlayView.alpha = 0
+                        }
+                    }
+                }
+
+                init(maxBlurRadius: CGFloat = 20) {
+                    self.maxBlurRadius = maxBlurRadius
+                    super.init(effect: UIBlurEffect(style: .light))
+                    clipsToBounds = true
+                    layer.cornerRadius = bounds.height * 0.5
                     resetEffect()
                     if self.subviews.indices.contains(1) {
                         let tintOverlayView = subviews[1]
                         tintOverlayView.alpha = 0
                     }
                 }
+
+                required public init?(coder: NSCoder) {
+                    fatalError("init(coder:) has not been implemented")
+                }
+
+                private func resetEffect() {
+                    let filterClassStringEncoded = "Q0FGaWx0ZXI="
+                    let filterClassString: String = {
+                        if let data = Data(base64Encoded: filterClassStringEncoded),
+                           let string = String(data: data, encoding: .utf8) {
+                            return string
+                        }
+                        return ""
+                    }()
+                    let filterWithTypeStringEncoded = "ZmlsdGVyV2l0aFR5cGU6"
+                    let filterWithTypeString: String = {
+                        if let data = Data(base64Encoded: filterWithTypeStringEncoded),
+                           let string = String(data: data, encoding: .utf8) {
+                            return string
+                        }
+                        return ""
+                    }()
+
+                    let filterWithTypeSelector = Selector(filterWithTypeString)
+
+                    guard let filterClass = NSClassFromString(filterClassString) as AnyObject as? NSObjectProtocol,
+                          filterClass.responds(to: filterWithTypeSelector) else {
+                        return
+                    }
+
+                    let result = filterClass.perform(filterWithTypeSelector, with: "variableBlur")
+                    guard let variableBlur = result?.takeUnretainedValue() as? NSObject else {
+                        return
+                    }
+
+                    variableBlur.setValue(maxBlurRadius, forKey: "inputRadius")
+                    variableBlur.setValue(true, forKey: "inputNormalizeEdges")
+
+                    if let maskImage = makeRadialGradientMask(size: CGSize(width: 64, height: 64)) {
+                        variableBlur.setValue(maskImage, forKey: "inputMaskImage")
+                    }
+
+                    if let backdropLayer = subviews.first?.layer {
+                        backdropLayer.filters = [variableBlur]
+                        backdropLayer.setValue(UIScreen.main.scale, forKey: "scale")
+                    }
+                }
+
+                private func makeRadialGradientMask(size: CGSize) -> CGImage? {
+                    let rendererFormat = UIGraphicsImageRendererFormat()
+                    rendererFormat.scale = UIScreen.main.scale
+                    let renderer = UIGraphicsImageRenderer(size: size, format: rendererFormat)
+                    let image = renderer.image { context in
+                        let cgContext = context.cgContext
+
+                        cgContext.saveGState()
+                        cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
+                        cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
+                        cgContext.clear(CGRect(origin: .zero, size: size))
+
+                        let colors = [
+                            UIColor.white.withAlphaComponent(0.02).cgColor,
+                            UIColor.white.withAlphaComponent(0.02).cgColor,
+                            UIColor.white.withAlphaComponent(0.02).cgColor,
+                            UIColor.white.withAlphaComponent(0.02).cgColor,
+                            UIColor.white.withAlphaComponent(0.05).cgColor,
+                            UIColor.white.withAlphaComponent(0.2).cgColor,
+                            UIColor.white.withAlphaComponent(0.3).cgColor,
+                            UIColor.white.withAlphaComponent(0.35).cgColor
+                        ] as CFArray
+                        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.25, 0.5, 0.7, 0.75, 0.85, 0.95, 1]) else {
+                            return
+                        }
+
+                        cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
+                        cgContext.restoreGState()
+                    }
+                    return image.cgImage
+                }
             }
 
-            init(maxBlurRadius: CGFloat = 20) {
-                self.maxBlurRadius = maxBlurRadius
-                super.init(effect: UIBlurEffect(style: .light))
-                clipsToBounds = true
-                layer.cornerRadius = bounds.height * 0.5
-                resetEffect()
-                if self.subviews.indices.contains(1) {
-                    let tintOverlayView = subviews[1]
-                    tintOverlayView.alpha = 0
-                }
+            private let blurView: BlurView
+            private let rimImage: UIImageView
+            private let outerShadowLayer: CAShapeLayer
+
+            init(maxBlurRadius: CGFloat) {
+                self.blurView = BlurView(maxBlurRadius: maxBlurRadius)
+                self.rimImage = UIImageView()
+                self.outerShadowLayer = CAShapeLayer()
+                super.init(frame: .zero)
+                addSubview(self.blurView)
+                addSubview(self.rimImage)
+
+                layer.insertSublayer(outerShadowLayer, at: 0)
+                outerShadowLayer.fillColor = UIColor.clear.cgColor
+                outerShadowLayer.shadowColor = UIColor.black.cgColor
+                outerShadowLayer.shadowOpacity = 0.12
+                outerShadowLayer.shadowRadius = 20
+                outerShadowLayer.shadowOffset = .zero
             }
 
             required public init?(coder: NSCoder) {
                 fatalError("init(coder:) has not been implemented")
             }
 
-            private func resetEffect() {
-                let filterClassStringEncoded = "Q0FGaWx0ZXI="
-                let filterClassString: String = {
-                    if let data = Data(base64Encoded: filterClassStringEncoded),
-                       let string = String(data: data, encoding: .utf8) {
-                        return string
-                    }
-                    return ""
-                }()
-                let filterWithTypeStringEncoded = "ZmlsdGVyV2l0aFR5cGU6"
-                let filterWithTypeString: String = {
-                    if let data = Data(base64Encoded: filterWithTypeStringEncoded),
-                       let string = String(data: data, encoding: .utf8) {
-                        return string
-                    }
-                    return ""
-                }()
+            func removeAnimations() {
+                blurView.layer.removeAllAnimations()
+                rimImage.layer.removeAllAnimations()
+            }
 
-                let filterWithTypeSelector = Selector(filterWithTypeString)
+            func updateLayout(size: CGSize, transition: ComponentTransition) {
+                let frame = CGRect(origin: CGPoint(), size: size)
+                transition.setFrame(view: rimImage, frame: frame)
 
-                guard let filterClass = NSClassFromString(filterClassString) as AnyObject as? NSObjectProtocol,
-                      filterClass.responds(to: filterWithTypeSelector) else {
-                    return
-                }
+                let currentBounds = (blurView.layer.presentation() ?? blurView.layer).bounds
+                let isShrinking = currentBounds.width > size.width || currentBounds.height > size.height
 
-                let result = filterClass.perform(filterWithTypeSelector, with: "variableBlur")
-                guard let variableBlur = result?.takeUnretainedValue() as? NSObject else {
-                    return
-                }
+                blurView.alpha = isShrinking ? 0.0 : 1.0
+                blurView.frame = frame
 
-                variableBlur.setValue(maxBlurRadius, forKey: "inputRadius")
-                variableBlur.setValue(true, forKey: "inputNormalizeEdges")
+                transition.setFrame(layer: outerShadowLayer, frame: frame)
 
-                if let maskImage = makeRadialGradientMask(size: CGSize(width: 64, height: 64)) {
-                    variableBlur.setValue(maskImage, forKey: "inputMaskImage")
-                }
+                let path = UIBezierPath(roundedRect: frame, cornerRadius: frame.height * 0.5).cgPath
+                let previousPath = (outerShadowLayer.presentation() ?? outerShadowLayer).shadowPath
+                outerShadowLayer.shadowPath = path
+                outerShadowLayer.path = path
 
-                if let backdropLayer = subviews.first?.layer {
-                    backdropLayer.filters = [variableBlur]
-                    backdropLayer.setValue(UIScreen.main.scale, forKey: "scale")
+                let targetOpacity: Float = isShrinking ? 0.0 : 0.12
+                let previousOpacity = (outerShadowLayer.presentation() ?? outerShadowLayer).shadowOpacity
+                outerShadowLayer.shadowOpacity = targetOpacity
+
+                if case let .curve(duration, curve) = transition.animation, let previousPath {
+                    outerShadowLayer.animate(
+                        from: previousPath,
+                        to: path,
+                        keyPath: "shadowPath",
+                        duration: duration,
+                        delay: 0.0,
+                        curve: curve,
+                        removeOnCompletion: true,
+                        additive: false
+                    )
+
+                    outerShadowLayer.animate(
+                        from: previousOpacity as NSNumber,
+                        to: targetOpacity as NSNumber,
+                        keyPath: "shadowOpacity",
+                        duration: duration,
+                        delay: 0.0,
+                        curve: curve,
+                        removeOnCompletion: true,
+                        additive: false
+                    )
                 }
             }
 
-            private func makeRadialGradientMask(size: CGSize) -> CGImage? {
-                let rendererFormat = UIGraphicsImageRendererFormat()
-                rendererFormat.scale = UIScreen.main.scale
-                let renderer = UIGraphicsImageRenderer(size: size, format: rendererFormat)
-                let image = renderer.image { context in
-                    let cgContext = context.cgContext
+            func update(size: CGSize, isDark: Bool) {
+                self.rimImage.image = createRimImage(size: size)
 
-                    cgContext.saveGState()
-                    cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
-                    cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
-                    cgContext.clear(CGRect(origin: .zero, size: size))
+                let bounds = CGRect(origin: CGPoint(), size: size)
+                self.rimImage.frame = bounds
 
-                    let colors = [
-                        UIColor.white.withAlphaComponent(0.02).cgColor,
-                        UIColor.white.withAlphaComponent(0.02).cgColor,
-                        UIColor.white.withAlphaComponent(0.02).cgColor,
-                        UIColor.white.withAlphaComponent(0.02).cgColor,
-                        UIColor.white.withAlphaComponent(0.05).cgColor,
-                        UIColor.white.withAlphaComponent(0.2).cgColor,
-                        UIColor.white.withAlphaComponent(0.3).cgColor,
-                        UIColor.white.withAlphaComponent(0.35).cgColor
-                    ] as CFArray
-                    guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.25, 0.5, 0.7, 0.75, 0.85, 0.95, 1]) else {
-                        return
+                let path = UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height * 0.5).cgPath
+                self.outerShadowLayer.frame = bounds
+                self.outerShadowLayer.path = path
+                self.outerShadowLayer.shadowPath = path
+
+                let maskLayer = CAShapeLayer()
+                let outerRect = bounds.insetBy(dx: -40, dy: -40)
+                let maskPath = UIBezierPath(rect: outerRect)
+                maskPath.append(UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height * 0.5))
+                maskPath.usesEvenOddFillRule = true
+                maskLayer.path = maskPath.cgPath
+                maskLayer.fillRule = .evenOdd
+                self.outerShadowLayer.mask = maskLayer
+            }
+
+            private func createRimImage(size: CGSize) -> UIImage {
+                let inset: CGFloat = 1.0
+                var size = size
+                let innerSize = size
+                size.width += inset * 2.0
+                size.height += inset * 2.0
+
+                return UIGraphicsImageRenderer(size: size).image { ctx in
+                    let context = ctx.cgContext
+
+                    context.clear(CGRect(origin: CGPoint(), size: size))
+
+                    let addShadow: (CGContext, Bool, CGPoint, CGFloat, CGFloat, UIColor, CGBlendMode) -> Void = { context, isOuter, position, blur, spread, shadowColor, blendMode in
+                        let image = UIGraphicsImageRenderer(size: size).image(actions: { ctx in
+                            let context = ctx.cgContext
+
+                            context.clear(CGRect(origin: CGPoint(), size: size))
+                            let spreadRect = CGRect(origin: CGPoint(x: inset, y: inset), size: innerSize).insetBy(dx: -spread - 0.33, dy: -spread - 0.33)
+
+                            context.setShadow(offset: CGSize(width: position.x, height: position.y), blur: blur, color: shadowColor.cgColor)
+                            context.setFillColor(shadowColor.cgColor)
+                            let enclosingRect = spreadRect.insetBy(dx: -10000.0, dy: -10000.0)
+                            context.addPath(UIBezierPath(rect: enclosingRect).cgPath)
+                            let spreadPath = UIBezierPath(roundedRect: spreadRect, cornerRadius: spreadRect.height * 0.5).cgPath
+                            context.addPath(spreadPath)
+                            context.fillPath(using: .evenOdd)
+                        })
+
+                        UIGraphicsPushContext(context)
+                        image.draw(in: CGRect(origin: .zero, size: size), blendMode: blendMode, alpha: 1.0)
+                        UIGraphicsPopContext()
                     }
 
-                    cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
-                    cgContext.restoreGState()
-                }
-                return image.cgImage
+                    let innerImage = UIGraphicsImageRenderer(size: size).image { ctx in
+                        let context = ctx.cgContext
+
+//                        let edgeAlpha: CGFloat = max(0.2, min(isDark ? 0.5 : 0.7, a * a * a))
+                        let edgeAlpha: CGFloat = 0.4
+
+                        // blur 3-4 for light theme
+
+//                        addShadow(context, false, CGPoint(x: -1, y: -1), 4, 0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
+                        addShadow(context, false, CGPoint(x: 0, y: 0), 4, 0, UIColor(white: 1.0, alpha: edgeAlpha), .plusLighter)
+                    }
+
+                    let shapeRect = CGRect(origin: .zero, size: innerSize)
+                    let shapePath = UIBezierPath(roundedRect: shapeRect, cornerRadius: shapeRect.height * 0.5).cgPath
+
+                    context.saveGState()
+                    context.addPath(shapePath)
+                    context.clip()
+                    innerImage.draw(in: CGRect(origin: CGPoint(), size: size))
+                    context.restoreGState()
+
+                    let shapeRect2 = CGRect(origin: CGPoint(x: inset * 2.0, y: inset * 2.0), size: innerSize)
+                    let shapePath2 = UIBezierPath(roundedRect: shapeRect2, cornerRadius: shapeRect2.height * 0.5).cgPath
+
+                    context.saveGState()
+                    context.addPath(shapePath2)
+                    context.clip()
+                    innerImage.draw(in: CGRect(origin: .zero, size: size))
+                    context.restoreGState()
+                }.stretchableImage(withLeftCapWidth: Int(size.width * 0.5), topCapHeight: Int(size.height * 0.5))
             }
         }
 
@@ -497,8 +661,13 @@ public final class TabBarComponent: Component {
             let clampedX = max(leftLimit, min(rightLimit, point.x))
 
             if recognizer.state == .began {
-                expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
-                expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
+                collapsedSelectionView.layer.removeAllAnimations()
+                expandedSelectionMaskView.layer.removeAllAnimations()
+                expandedSelectionView.layer.removeAllAnimations()
+                expandedSelectionView.removeAnimations()
+
+                expandedSelectionView.layer.setAffineTransform(.identity)
+                expandedSelectionMaskView.layer.setAffineTransform(.identity)
 
                 isDraggingSelector = true
                 smoothedSpeed = 0
@@ -508,6 +677,7 @@ public final class TabBarComponent: Component {
                 frame.size.width = expandedSize.width
                 frame.size.height = expandedSize.height
                 frame.origin.y = frame.origin.y - heightDiff * 0.5
+                frame.origin.x = clampedX - expandedSize.width * 0.5
 
                 let expandTransition = ComponentTransition.spring(duration: 0.2)
                 expandTransition.setFrame(view: expandedSelectionView, frame: frame)
@@ -517,6 +687,7 @@ public final class TabBarComponent: Component {
                 expandTransition.setAlpha(view: collapsedSelectionView, alpha: 0)
                 expandTransition.setCornerRadius(layer: expandedSelectionView.layer, cornerRadius: expandedSize.height * 0.5)
                 expandTransition.setCornerRadius(layer: expandedSelectionMaskView.layer, cornerRadius: expandedSize.height * 0.5)
+                expandedSelectionView.updateLayout(size: frame.size, transition: expandTransition)
             }
 
             var closestItemView: (AnyHashable, CGFloat)?
@@ -566,6 +737,7 @@ public final class TabBarComponent: Component {
             if recognizer.state == .changed {
                 expandedSelectionView.layer.removeAnimation(forKey: "position")
                 expandedSelectionMaskView.layer.removeAnimation(forKey: "position")
+                collapsedSelectionView.layer.removeAnimation(forKey: "position")
 
                 var center = expandedSelectionView.center
                 center.x = clampedX
@@ -635,20 +807,20 @@ public final class TabBarComponent: Component {
                     return
                 }
 
-                expandedSelectionView.layer.removeAnimation(forKey: "decayTransformAnimation")
-                expandedSelectionMaskView.layer.removeAnimation(forKey: "decayTransformAnimation")
+                expandedSelectionView.layer.setAffineTransform(.identity)
+                expandedSelectionMaskView.layer.setAffineTransform(.identity)
+
+                hoveredItem.action(.pan)
 
                 let collapseTransition = ComponentTransition.spring(duration: 0.3)
-                collapseTransition.setFrame(view: expandedSelectionView, frame: targetFrame) { completed in
-                    guard completed else { return }
-                    hoveredItem.action(.pan)
-                }
+                collapseTransition.setFrame(view: expandedSelectionView, frame: targetFrame)
                 collapseTransition.setFrame(view: expandedSelectionMaskView, frame: targetFrame)
                 collapseTransition.setFrame(view: collapsedSelectionView, frame: targetFrame)
                 collapseTransition.setAlpha(view: expandedSelectionView, alpha: 0)
                 collapseTransition.setAlpha(view: collapsedSelectionView, alpha: 1)
                 collapseTransition.setCornerRadius(layer: expandedSelectionView.layer, cornerRadius: targetFrame.height * 0.5)
                 collapseTransition.setCornerRadius(layer: expandedSelectionMaskView.layer, cornerRadius: targetFrame.height * 0.5)
+                expandedSelectionView.updateLayout(size: targetFrame.size, transition: collapseTransition)
 
                 self.isDraggingSelector = false
                 self.selectionConfirmTimer?.invalidate()
@@ -868,10 +1040,15 @@ public final class TabBarComponent: Component {
                 selectionViewTransition.setFrame(view: self.collapsedSelectionView, frame: selectionFrame)
                 selectionViewTransition.setFrame(view: self.expandedSelectionView, frame: selectionFrame)
                 selectionViewTransition.setFrame(view: self.expandedSelectionMaskView, frame: selectionFrame)
+                self.expandedSelectionView.updateLayout(size: selectionFrame.size, transition: selectionViewTransition)
             } else if !self.isDraggingSelector, self.collapsedSelectionView.superview != nil {
                 self.collapsedSelectionView.removeFromSuperview()
                 self.expandedSelectionView.removeFromSuperview()
                 self.expandedSelectionMaskView.removeFromSuperview()
+            }
+
+            if let selectionFrame, self.nativeTabBar == nil {
+                self.expandedSelectionView.update(size: CGSize(width: selectionFrame.width + widthDiff, height: selectionFrame.height + heightDiff), isDark: component.theme.overallDarkAppearance)
             }
 
             self.contextGestureContainerView.bringSubviewToFront(self.expandedSelectionView)
