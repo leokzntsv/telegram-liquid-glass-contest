@@ -201,12 +201,15 @@ public final class TabBarComponent: Component {
             private let blurView: BlurView
             private let rimImage: UIImageView
             private let outerShadowLayer: CAShapeLayer
+            private let outerShadowMaskLayer: CAShapeLayer
 
             init(maxBlurRadius: CGFloat) {
                 self.blurView = BlurView(maxBlurRadius: maxBlurRadius)
                 self.rimImage = UIImageView()
                 self.outerShadowLayer = CAShapeLayer()
+                self.outerShadowMaskLayer = CAShapeLayer()
                 super.init(frame: .zero)
+
                 addSubview(self.blurView)
                 addSubview(self.rimImage)
 
@@ -216,6 +219,7 @@ public final class TabBarComponent: Component {
                 outerShadowLayer.shadowOpacity = 0.12
                 outerShadowLayer.shadowRadius = 20
                 outerShadowLayer.shadowOffset = .zero
+                outerShadowLayer.mask = outerShadowMaskLayer
             }
 
             required public init?(coder: NSCoder) {
@@ -238,27 +242,38 @@ public final class TabBarComponent: Component {
                 blurView.frame = frame
 
                 transition.setFrame(layer: outerShadowLayer, frame: frame)
+                transition.setFrame(layer: outerShadowMaskLayer, frame: frame)
 
-                let path = UIBezierPath(roundedRect: frame, cornerRadius: frame.height * 0.5).cgPath
-                let previousPath = (outerShadowLayer.presentation() ?? outerShadowLayer).shadowPath
-                outerShadowLayer.shadowPath = path
-                outerShadowLayer.path = path
+                let shadowPath = UIBezierPath(roundedRect: frame, cornerRadius: frame.height * 0.5).cgPath
+                let previousShadowPath = (outerShadowLayer.presentation() ?? outerShadowLayer).shadowPath
+                outerShadowLayer.shadowPath = shadowPath
+                outerShadowLayer.path = shadowPath
 
                 let targetOpacity: Float = isShrinking ? 0.0 : 0.12
                 let previousOpacity = (outerShadowLayer.presentation() ?? outerShadowLayer).shadowOpacity
                 outerShadowLayer.shadowOpacity = targetOpacity
 
-                if case let .curve(duration, curve) = transition.animation, let previousPath {
-                    outerShadowLayer.animate(
-                        from: previousPath,
-                        to: path,
-                        keyPath: "shadowPath",
-                        duration: duration,
-                        delay: 0.0,
-                        curve: curve,
-                        removeOnCompletion: true,
-                        additive: false
-                    )
+                let outerRect = frame.insetBy(dx: -40, dy: -40)
+                let maskPath = UIBezierPath(rect: outerRect)
+                maskPath.append(UIBezierPath(roundedRect: frame, cornerRadius: frame.height * 0.5))
+                maskPath.usesEvenOddFillRule = true
+                let previousMaskPath = (outerShadowMaskLayer.presentation() ?? outerShadowMaskLayer).path
+                outerShadowMaskLayer.fillRule = .evenOdd
+                outerShadowMaskLayer.path = maskPath.cgPath
+
+                if case let .curve(duration, curve) = transition.animation {
+                    if let previousShadowPath {
+                        outerShadowLayer.animate(
+                            from: previousShadowPath,
+                            to: shadowPath,
+                            keyPath: "shadowPath",
+                            duration: duration,
+                            delay: 0.0,
+                            curve: curve,
+                            removeOnCompletion: true,
+                            additive: false
+                        )
+                    }
 
                     outerShadowLayer.animate(
                         from: previousOpacity as NSNumber,
@@ -270,28 +285,24 @@ public final class TabBarComponent: Component {
                         removeOnCompletion: true,
                         additive: false
                     )
+
+                    if let previousMaskPath {
+                        outerShadowMaskLayer.animate(
+                            from: previousMaskPath,
+                            to: maskPath.cgPath,
+                            keyPath: "path",
+                            duration: duration,
+                            delay: 0.0,
+                            curve: curve,
+                            removeOnCompletion: true,
+                            additive: false
+                        )
+                    }
                 }
             }
 
             func update(size: CGSize, isDark: Bool) {
                 self.rimImage.image = createRimImage(size: size)
-
-                let bounds = CGRect(origin: CGPoint(), size: size)
-                self.rimImage.frame = bounds
-
-                let path = UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height * 0.5).cgPath
-                self.outerShadowLayer.frame = bounds
-                self.outerShadowLayer.path = path
-                self.outerShadowLayer.shadowPath = path
-
-                let maskLayer = CAShapeLayer()
-                let outerRect = bounds.insetBy(dx: -40, dy: -40)
-                let maskPath = UIBezierPath(rect: outerRect)
-                maskPath.append(UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height * 0.5))
-                maskPath.usesEvenOddFillRule = true
-                maskLayer.path = maskPath.cgPath
-                maskLayer.fillRule = .evenOdd
-                self.outerShadowLayer.mask = maskLayer
             }
 
             private func createRimImage(size: CGSize) -> UIImage {
