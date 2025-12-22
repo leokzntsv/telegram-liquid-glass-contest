@@ -225,7 +225,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let textPlaceholderNode: ImmediateTextNodeWithEntities
     
     private let glassBackgroundContainer: GlassBackgroundContainerView
-    
+    private let glassBackgroundView: GlassBackgroundView
+
     public var textLockIconNode: ASImageNode?
     public var contextPlaceholderNode: TextNode?
     public var slowmodePlaceholderNode: ChatTextInputSlowmodePlaceholderNode?
@@ -269,7 +270,17 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var commentsButtonDotLayer: RasterizedCompositionImageLayer?
     private var attachmentButtonUnseenIcon: UIImageView?
     public let attachmentButtonDisabledNode: HighlightableButtonNode
-    
+    private lazy var attachmentButtonPanGesture: UIPanGestureRecognizer = {
+        let g = UIPanGestureRecognizer(target: self, action: #selector(attachmentButtonPan(_:)))
+        g.maximumNumberOfTouches = 1
+        g.cancelsTouchesInView = false
+        return g
+    }()
+    private let attachmentButtonMorphLayer: CAShapeLayer
+    private var attachmentButtonLayoutCenter: CGPoint = .zero
+    private var attachmentButtonInitialCenter: CGPoint = .zero
+    private var isDraggingAttachmentButton = false
+
     public var attachmentImageNode: TransformImageNode?
     
     public let searchLayoutClearButton: HighlightTrackingButton
@@ -628,7 +639,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.inputMenu = TextInputMenu(hasSpoilers: hasSpoilers, hasQuotes: hasQuotes)
         
         self.glassBackgroundContainer = GlassBackgroundContainerView()
-        
+        self.glassBackgroundView = GlassBackgroundView()
+
         self.textInputContainerBackgroundView = GlassBackgroundView(frame: CGRect())
         
         self.accessoryPanelContainer = UIView()
@@ -694,7 +706,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButtonIcon = GlassBackgroundView.ContentImageView()
         self.attachmentButtonIcon.isUserInteractionEnabled = false
         self.attachmentButtonBackground.contentView.addSubview(self.attachmentButtonIcon)
-        
+
+        self.attachmentButtonMorphLayer = CAShapeLayer()
+        self.attachmentButtonMorphLayer.fillColor = UIColor.black.cgColor
+        self.glassBackgroundView.layer.mask = self.attachmentButtonMorphLayer
+
         self.attachmentButtonDisabledNode = HighlightableButtonNode()
         self.searchLayoutClearButton = HighlightTrackingButton()
         self.searchLayoutClearButtonIcon = GlassBackgroundView.ContentImageView()
@@ -806,6 +822,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         self.attachmentButton.addTarget(self, action: #selector(self.attachmentButtonPressed), for: .touchUpInside)
+        if #unavailable(iOS 26.0) {
+            self.attachmentButton.addTarget(self, action: #selector(self.attachmentButtonPressDown), for: .touchDown)
+            self.attachmentButton.addTarget(self, action: #selector(self.attachmentButtonPressUp), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            self.attachmentButton.addGestureRecognizer(self.attachmentButtonPanGesture)
+            self.attachmentButtonBackground.disablesInteractiveTransitionGestureRecognizer = true
+            self.attachmentButtonBackground.disablesInteractiveKeyboardGestureRecognizer = true
+            self.attachmentButton.disablesInteractiveKeyboardGestureRecognizer = true
+        }
         self.attachmentButton.highligthedChanged = { [weak self] highlighted in
             if let self {
                 if highlighted {
@@ -820,7 +844,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         self.attachmentButtonDisabledNode.addTarget(self, action: #selector(self.attachmentButtonPressed), forControlEvents: .touchUpInside)
-  
+
         self.sendActionButtons.sendButtonLongPressed = { [weak self] node, gesture in
             self?.interfaceInteraction?.displaySendMessageOptions(node, gesture)
         }
@@ -918,7 +942,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.searchLayoutClearButton.addTarget(self, action: #selector(self.searchLayoutClearButtonPressed), for: .touchUpInside)
         self.searchLayoutClearButton.alpha = 0.0
         self.searchLayoutClearButtonIcon.alpha = 0.0
-        
+
+        if #unavailable(iOS 26.0) {
+            self.glassBackgroundContainer.contentView.insertSubview(self.glassBackgroundView, at: 0)
+        }
         self.glassBackgroundContainer.contentView.addSubview(self.textInputBackgroundNode.view)
         self.glassBackgroundContainer.contentView.addSubview(self.textInputContainerBackgroundView)
         
@@ -940,7 +967,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.glassBackgroundContainer.contentView.addSubview(self.menuButton.view)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonBackground)
         self.glassBackgroundContainer.contentView.addSubview(self.attachmentButtonDisabledNode.view)
-        
+
         self.glassBackgroundContainer.contentView.addSubview(self.startButton.view)
           
         self.glassBackgroundContainer.contentView.addSubview(self.sendActionButtons.view)
@@ -3276,12 +3303,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let attachmentButtonFrame = CGRect(origin: CGPoint(x: attachmentButtonX, y: textInputFrame.maxY - 40.0), size: CGSize(width: 40.0, height: 40.0))
         attachmentButtonX += 40.0 + 6.0
+        self.attachmentButtonLayoutCenter = attachmentButtonFrame.center
+
         self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: ComponentTransition(transition))
-        
-        transition.updateFrame(layer: self.attachmentButtonBackground.layer, frame: attachmentButtonFrame)
-        transition.updateFrame(layer: self.attachmentButton.layer, frame: CGRect(origin: CGPoint(), size: attachmentButtonFrame.size))
-        transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: self.attachmentButtonBackground.frame)
-        
+
+        if !self.isDraggingAttachmentButton, #unavailable(iOS 26.0) {
+            transition.updateFrame(layer: self.attachmentButtonBackground.layer, frame: attachmentButtonFrame)
+            transition.updateFrame(layer: self.attachmentButton.layer, frame: CGRect(origin: CGPoint(), size: attachmentButtonFrame.size))
+            transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: self.attachmentButtonBackground.frame)
+        }
+
         if let image = self.attachmentButtonIcon.image {
             let attachmentButtonIconFrame = CGRect(origin: CGPoint(x: floor((attachmentButtonFrame.width - image.size.width) * 0.5), y: floor((attachmentButtonFrame.height - image.size.height) * 0.5)), size: image.size)
             let transition = ComponentTransition(transition)
@@ -3503,7 +3534,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let containerFrame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: contentHeight + 64.0))
         transition.updateFrame(view: self.glassBackgroundContainer, frame: containerFrame)
         self.glassBackgroundContainer.update(size: containerFrame.size, isDark: interfaceState.theme.overallDarkAppearance, transition: ComponentTransition(transition))
-        
+
+        if #unavailable(iOS 26.0) {
+            transition.updateFrame(view: self.glassBackgroundView, frame: containerFrame)
+            self.glassBackgroundView.update(size: containerFrame.size, cornerRadius: 0, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: ComponentTransition(transition))
+            self.attachmentButtonMorphLayer.frame = self.glassBackgroundView.bounds
+        }
+
         return contentHeight
     }
     
@@ -5167,7 +5204,103 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.displayAttachmentMenu()
         }
     }
-    
+
+    @objc func attachmentButtonPressDown() {
+        self.isDraggingAttachmentButton = true
+
+        let scale = 1.3
+        let presentation = attachmentButtonBackground.layer.presentation() ?? attachmentButtonBackground.layer
+
+        let transformSpring = CASpringAnimation(keyPath: "transform")
+        transformSpring.fromValue = presentation.transform
+        transformSpring.toValue = CATransform3DMakeScale(scale, scale, 1)
+        transformSpring.damping = 15.0
+        transformSpring.stiffness = 300.0
+        transformSpring.mass = 1.0
+        transformSpring.duration = transformSpring.settlingDuration
+
+        attachmentButtonBackground.layer.transform = CATransform3DMakeScale(scale, scale, 1)
+        attachmentButtonBackground.layer.add(transformSpring, forKey: "transform")
+
+        drawAttachButtonMorph()
+    }
+
+    @objc func attachmentButtonPressUp() {
+        self.isDraggingAttachmentButton = false
+
+        let scale = 1.0
+        let presentation = attachmentButtonBackground.layer.presentation() ?? attachmentButtonBackground.layer
+
+        let transformSpring = CASpringAnimation(keyPath: "transform")
+        transformSpring.fromValue = presentation.transform
+        transformSpring.toValue = CATransform3DMakeScale(scale, scale, 1)
+        transformSpring.damping = 12.0
+        transformSpring.stiffness = 200.0
+        transformSpring.mass = 1.0
+        transformSpring.duration = transformSpring.settlingDuration
+
+        attachmentButtonBackground.layer.transform = CATransform3DMakeScale(scale, scale, 1)
+        attachmentButtonBackground.layer.add(transformSpring, forKey: "transform")
+    }
+
+    @objc func attachmentButtonPan(_ gesture: UIPanGestureRecognizer) {
+        guard let superview = self.attachmentButtonBackground.superview else {
+            return
+        }
+        if gesture.state == .began {
+            self.isDraggingAttachmentButton = true
+            self.attachmentButtonInitialCenter = self.attachmentButtonBackground.center
+        }
+        let translation = gesture.translation(in: superview)
+
+        let dx = self.attachmentButtonBackground.center.x - attachmentButtonInitialCenter.x
+        let dy = self.attachmentButtonBackground.center.y - attachmentButtonInitialCenter.y
+        let distance = sqrt(dx * dx + dy * dy)
+        let damping = 0.1 / (1 + distance / 2)
+
+        self.attachmentButtonBackground.center = CGPoint(x: self.attachmentButtonBackground.center.x + translation.x * damping, y: self.attachmentButtonBackground.center.y + translation.y * damping)
+        gesture.setTranslation(.zero, in: superview)
+
+        drawAttachButtonMorph()
+
+        if gesture.state == .ended || gesture.state == .cancelled || gesture.state == .failed {
+            self.isDraggingAttachmentButton = false
+            let animation = CABasicAnimation(keyPath: "position")
+            animation.fromValue = self.attachmentButtonBackground.layer.position
+            animation.toValue = self.attachmentButtonLayoutCenter
+            animation.duration = 0.1
+            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+            self.attachmentButtonBackground.layer.add(animation, forKey: "returnToOrigin")
+            self.attachmentButtonBackground.layer.position = self.attachmentButtonLayoutCenter
+            self.attachmentButtonInitialCenter = .zero
+
+            self.attachmentButtonMorphLayer.path = nil
+        }
+    }
+
+    private func drawAttachButtonMorph() {
+        let r1 = (attachmentButtonBackground.layer.presentation() ?? attachmentButtonBackground.layer).frame.width * 0.5
+        let r2 = textInputContainerBackgroundView.bounds.height * 0.5
+
+        let c1 = attachmentButtonBackground.center
+        let c2 = CGPoint(x: textInputContainerBackgroundView.frame.minX + r2, y: textInputContainerBackgroundView.center.y)
+
+        let d = c1.distance(to: c2)
+        let gap = max(0, d - (r1 + r2))
+
+        let entity1 = MorphingEntity(handleSize: 2, curvature: 0.3, radius: r1, position: c1)
+        let entity2 = MorphingEntity(handleSize: 2, curvature: 0.3, radius: r2, position: c2)
+
+        let bridgeGap: CGFloat = 0
+
+        if gap <= bridgeGap {
+            attachmentButtonMorphLayer.path = entity1.morphPath(with: entity2, maxGap: bridgeGap)?.cgPath
+        } else {
+            attachmentButtonMorphLayer.path = nil
+        }
+    }
+
     @objc func searchLayoutClearButtonPressed() {
         if let interfaceInteraction = self.interfaceInteraction {
             interfaceInteraction.updateTextInputStateAndMode { textInputState, inputMode in
@@ -5474,5 +5607,104 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public func makeAttachmentMenuTransition(accessoryPanelNode: ASDisplayNode?) -> AttachmentInputPanelTransition {
         return AttachmentInputPanelTransition(inputNode: self, accessoryPanelNode: accessoryPanelNode, menuButtonNode: self.menuButton, menuButtonBackgroundView: self.menuButtonBackgroundView, menuIconNode: self.menuButtonIconNode, menuTextNode: self.menuButtonTextNode, prepareForDismiss: { self.menuButtonIconNode.enqueueState(.app, animated: false) })
+    }
+}
+
+private struct MorphingEntity: Equatable {
+    let handleSize: CGFloat
+    let curvature: CGFloat
+    let radius: CGFloat
+    let position: CGPoint
+
+    func morphPath(with entity: MorphingEntity, maxGap: CGFloat) -> UIBezierPath? {
+        let distance = position.distance(to: entity.position)
+        let r1 = radius
+        let r2 = entity.radius
+
+        let contact = r1 + r2
+        let gap = distance - contact
+
+        guard gap <= maxGap, distance > abs(r1 - r2) else { return nil }
+
+//        let t = max(0, min(1, 1 - gap / maxGap))
+
+        let u1: CGFloat, u2: CGFloat
+        if distance < r1 + r2 {
+            u1 = acos(
+                (pow(radius, 2) + pow(distance, 2) - pow(entity.radius, 2)) / (2 * radius * distance)
+            )
+            u2 = acos(
+                (pow(entity.radius, 2) + pow(distance, 2) - pow(radius, 2)) / (2 * entity.radius * distance)
+            )
+        } else {
+            u1 = 0
+            u2 = 0
+        }
+
+        return path(for: MorphPath(handleSize: handleSize /** t*/, curvature: curvature /** t*/, entity1: self, entity2: entity, distance: distance, u1: u1, u2: u2))
+    }
+
+    private func path(for morphPath: MorphPath) -> UIBezierPath {
+        let path = UIBezierPath()
+
+        path.move(to: morphPath.p1)
+        path.addCurve(to: morphPath.p3, controlPoint1: morphPath.h1, controlPoint2: morphPath.h3)
+
+        path.addLine(to: morphPath.p4)
+
+        path.addCurve(to: morphPath.p2, controlPoint1: morphPath.h4, controlPoint2: morphPath.h2)
+        path.addLine(to: morphPath.p1)
+
+        return path
+    }
+}
+
+private struct MorphPath {
+    let h1: CGPoint, h2: CGPoint, h3: CGPoint, h4: CGPoint
+    let p1: CGPoint, p2: CGPoint, p3: CGPoint, p4: CGPoint
+
+    init(handleSize: CGFloat, curvature: CGFloat, entity1: MorphingEntity, entity2: MorphingEntity, distance: CGFloat, u1: CGFloat, u2: CGFloat) {
+        let angleBetweenCenters = entity2.position.angle(with: entity1.position)
+        let maxSpread = acos((entity1.radius - entity2.radius) / distance)
+        let pi = CGFloat.pi
+
+        let angle1 = angleBetweenCenters + u1 + (maxSpread - u1) * curvature
+        let angle2 = angleBetweenCenters - u1 - (maxSpread - u1) * curvature
+        let angle3 = angleBetweenCenters + pi - u2 - (pi - u2 - maxSpread) * curvature
+        let angle4 = angleBetweenCenters - pi + u2 + (pi - u2 - maxSpread) * curvature
+        p1 = entity1.position.vector(with: angle1, and: entity1.radius)
+        p2 = entity1.position.vector(with: angle2, and: entity1.radius)
+        p3 = entity2.position.vector(with: angle3, and: entity2.radius)
+        p4 = entity2.position.vector(with: angle4, and: entity2.radius)
+
+        let totalRadius = entity1.radius + entity2.radius
+        let d2Base = min(curvature * handleSize, p1.distance(to: p3) / totalRadius)
+        let d2 = d2Base * min(1, distance * 2 / totalRadius)
+
+        let r1 = entity1.radius * d2
+        let r2 = entity2.radius * d2
+
+        let halfPi: CGFloat = CGFloat.pi / 2
+        h1 = p1.vector(with: angle1 - halfPi, and: r1)
+        h2 = p2.vector(with: angle2 + halfPi, and: r1)
+        h3 = p3.vector(with: angle3 + halfPi, and: r2)
+        h4 = p4.vector(with: angle4 - halfPi, and: r2)
+    }
+}
+
+private extension CGPoint {
+    func distance(to p2: CGPoint) -> CGFloat {
+        return pow(pow(x - p2.x, 2) + pow(y - p2.y, 2), 0.5)
+    }
+
+    func angle(with p2: CGPoint) -> CGFloat {
+        return atan2(y - p2.y, x - p2.x)
+    }
+
+    func vector(with angle: CGFloat, and radius: CGFloat) -> CGPoint {
+        return CGPoint(
+            x: x + radius * cos(angle),
+            y: y + radius * sin(angle)
+        )
     }
 }
