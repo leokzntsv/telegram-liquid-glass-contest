@@ -651,7 +651,7 @@ public final class TabBarComponent: Component {
         private var lastSmoothedSpeed: CGFloat = 0
         private var deformAmount: CGFloat = 0
         private let maxDeform: CGFloat = 0.25
-        private let speedForMaxDeform: CGFloat = 1000
+        private let speedForMaxDeform: CGFloat = 2000
         private let smoothingFactor: CGFloat = 0.85
 
         private var itemSize: CGSize?
@@ -733,6 +733,7 @@ public final class TabBarComponent: Component {
                 hoveredItem?.action(.pan)
             }
 
+            // there is no such functionality on native iOS 26 tab bar
             if recognizer.state == .changed && isHoveredUpdated {
 //                self.selectionConfirmTimer?.invalidate()
 //                let selectionConfirmTimer = SwiftSignalKit.Timer(timeout: 0.2, repeat: false, completion: { [weak self] in
@@ -758,7 +759,8 @@ public final class TabBarComponent: Component {
                 expandedSelectionMaskView.center = center
                 collapsedSelectionView.center = center
 
-                let rawSpeed = abs(recognizer.velocity(in: self).x)
+                let velocityX = recognizer.velocity(in: self).x
+                let rawSpeed = abs(velocityX)
                 smoothedSpeed = smoothingFactor * smoothedSpeed + (1 - smoothingFactor) * rawSpeed
 
                 let increasing = lastSmoothedSpeed == 0 || smoothedSpeed > lastSmoothedSpeed + 15
@@ -772,8 +774,16 @@ public final class TabBarComponent: Component {
                     let targetDeform = min(maxDeform, smoothedSpeed / speedForMaxDeform)
                     deformAmount = targetDeform
 
-                    let targetHeight = baseSize.height * (1 + deformAmount)
-                    let targetWidth = baseSize.width / (1 + deformAmount)
+                    let targetHeight: CGFloat
+                    let targetWidth: CGFloat
+
+                    if velocityX < 0 {
+                        targetHeight = baseSize.height * (1 + deformAmount)
+                        targetWidth = baseSize.width / (1 + deformAmount)
+                    } else {
+                        targetHeight = baseSize.height / (1 + deformAmount)
+                        targetWidth = baseSize.width * (1 + deformAmount)
+                    }
 
                     let presentation = expandedSelectionView.layer.presentation() ?? expandedSelectionView.layer
 
@@ -784,8 +794,16 @@ public final class TabBarComponent: Component {
                     let currentWidth = expandedSize.width * currentScaleX
 
                     let lerp: CGFloat = 0.2
-                    let newHeight = max(expandedSize.height, currentHeight + (targetHeight - currentHeight) * lerp)
-                    let newWidth = min(expandedSize.width, currentWidth + (targetWidth - currentWidth) * lerp)
+                    let newHeight: CGFloat
+                    let newWidth: CGFloat
+
+                    if velocityX < 0 {
+                        newHeight = max(expandedSize.height, currentHeight + (targetHeight - currentHeight) * lerp)
+                        newWidth = min(expandedSize.width, currentWidth + (targetWidth - currentWidth) * lerp)
+                    } else {
+                        newHeight = min(expandedSize.height, currentHeight + (targetHeight - currentHeight) * lerp)
+                        newWidth = max(expandedSize.width, currentWidth + (targetWidth - currentWidth) * lerp)
+                    }
 
                     let scaleY = newHeight / expandedSize.height
                     let scaleX = newWidth / expandedSize.width
