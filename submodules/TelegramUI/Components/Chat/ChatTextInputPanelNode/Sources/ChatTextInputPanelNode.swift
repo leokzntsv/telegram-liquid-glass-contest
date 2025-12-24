@@ -3712,7 +3712,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let inputLayer = self.textInputContainerBackgroundView.layer.presentation() ?? self.textInputContainerBackgroundView.layer
         let mediaLayer = self.mediaActionButtons.layer.presentation() ?? self.mediaActionButtons.layer
         let r1 = inputLayer.frame.height * 0.5
-        let r2 = mediaLayer.frame.width * 0.5 + (mediaButtonsMorphForward ? -2.0 : 0.0)
+        let r2 = mediaLayer.frame.width * 0.5 + (mediaButtonsMorphForward ? -2.0 : -0.5)
         let c1 = CGPoint(
             x: inputLayer.position.x + inputLayer.frame.width * 0.5 - r1 + (mediaButtonsMorphForward ? 0 : -2.0),
             y: inputLayer.position.y
@@ -3720,7 +3720,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let c2 = mediaLayer.position
         let entity1 = MorphingEntity(handleSize: 3, curvature: 0.5, radius: r1, position: c1)
         let entity2 = MorphingEntity(handleSize: 3, curvature: 0.5, radius: r2, position: c2)
-        self.attachmentButtonMorphLayer.path = entity1.morphPath(with: entity2, maxGap: 4)?.cgPath
+        self.attachmentButtonMorphLayer.path = entity1.morphPath(with: entity2, maxGap: 6)?.cgPath
         CATransaction.commit()
 
         if mediaButtonsMorphElapsed >= mediaButtonsMorphDuration {
@@ -5476,7 +5476,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let entity1 = MorphingEntity(handleSize: 2, curvature: 0.3, radius: r1, position: c1)
         let entity2 = MorphingEntity(handleSize: 2, curvature: 0.3, radius: r2, position: c2)
 
-        let bridgeGap: CGFloat = 0
+        let bridgeGap: CGFloat = 2
 
         if gap <= bridgeGap {
             attachmentButtonMorphLayer.path = entity1.morphPath(with: entity2, maxGap: bridgeGap)?.cgPath
@@ -5810,7 +5810,7 @@ private struct MorphingEntity: Equatable {
 
         guard gap <= maxGap, distance > abs(r1 - r2) else { return nil }
 
-//        let t = max(0, min(1, 1 - gap / maxGap))
+        let t = max(0, min(1, 1 - gap / maxGap))
 
         let u1: CGFloat, u2: CGFloat
         if distance < r1 + r2 {
@@ -5825,7 +5825,7 @@ private struct MorphingEntity: Equatable {
             u2 = 0
         }
 
-        return path(for: MorphPath(handleSize: handleSize /** t*/, curvature: curvature /** t*/, entity1: self, entity2: entity, distance: distance, u1: u1, u2: u2))
+        return path(for: MorphPath(handleSize: handleSize * t, curvature: curvature * t, entity1: self, entity2: entity, distance: distance, u1: u1, u2: u2))
     }
 
     private func path(for morphPath: MorphPath) -> UIBezierPath {
