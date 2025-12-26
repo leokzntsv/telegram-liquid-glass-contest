@@ -1084,8 +1084,6 @@ public final class GlassBackgroundView2: UIView {
 
         if self.nativeView == nil {
             self.blurView = BlurView(maxBlurRadius: 5)
-//            blurView.frame = self.contentContainer.bounds
-//            blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             self.contentContainer.insertSubview(blurView!, at: 0)
         }
     }

@@ -264,7 +264,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private let sendAsCloseIconView: UIImageView
     
     public let attachmentButton: HighlightTrackingButton
-    public let attachmentButtonBackground: GlassBackgroundView
+    public let attachmentButtonBackground: GlassBackgroundView2
     public let attachmentButtonIcon: GlassBackgroundView.ContentImageView
     private var commentsButtonIcon: RasterizedCompositionMonochromeLayer?
     private var commentsButtonCenterIcon: UIImageView?
@@ -703,7 +703,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButton.accessibilityTraits = [.button]
         self.attachmentButton.isAccessibilityElement = true
         
-        self.attachmentButtonBackground = GlassBackgroundView(frame: CGRect())
+        self.attachmentButtonBackground = GlassBackgroundView2(frame: CGRect())
         self.attachmentButtonBackground.contentView.addSubview(self.attachmentButton)
         
         self.attachmentButtonIcon = GlassBackgroundView.ContentImageView()
@@ -1416,6 +1416,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
         self.absoluteRect = (rect, containerSize)
         self.updateGlassBackground(transition: ComponentTransition(transition))
+        self.updateAttachmentBackground(transition: ComponentTransition(transition))
 
         if !self.sendActionButtons.frame.width.isZero {
             self.sendActionButtons.updateAbsoluteRect(CGRect(origin: rect.origin.offsetBy(dx: self.sendActionButtons.frame.minX, dy: self.sendActionButtons.frame.minY), size: self.sendActionButtons.frame.size), within: containerSize, transition: transition)
@@ -3374,7 +3375,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         attachmentButtonX += 40.0 + 6.0
         self.attachmentButtonLayoutCenter = attachmentButtonFrame.center
 
-        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: ComponentTransition(transition))
+        self.attachmentBackgroundState = (
+            frame: attachmentButtonFrame,
+            cornerRadius: attachmentButtonFrame.height * 0.5,
+            isDark: interfaceState.theme.overallDarkAppearance,
+            tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)),
+            isInteractive: true
+        )
+        self.updateAttachmentBackground(transition: ComponentTransition(transition))
 
         if !self.isDraggingAttachmentButton, #unavailable(iOS 26.0) {
             transition.updateFrame(layer: self.attachmentButtonBackground.layer, frame: attachmentButtonFrame)
@@ -3629,6 +3637,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var mediaButtonsMorphInputIsDark: Bool = false
     private var mediaButtonsMorphInputTintColor: GlassBackgroundView.TintColor = .init(kind: .panel, color: .clear)
     private var glassBackgroundState: (frame: CGRect, cornerRadius: CGFloat, isDark: Bool, tintColor: GlassBackgroundView.TintColor, isInteractive: Bool)?
+    private var attachmentBackgroundState: (frame: CGRect, cornerRadius: CGFloat, isDark: Bool, tintColor: GlassBackgroundView.TintColor, isInteractive: Bool)?
     private var previousTextInputHeight: CGFloat?
 
     private func glassSampleView() -> UIView {
@@ -3659,6 +3668,25 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             isDark: glassBackgroundState.isDark,
             tintColor: glassBackgroundState.tintColor,
             isInteractive: glassBackgroundState.isInteractive,
+            transition: transition
+        )
+    }
+
+    private func updateAttachmentBackground(transition: ComponentTransition) {
+        guard let attachmentBackgroundState = self.attachmentBackgroundState else {
+            return
+        }
+        let sampleView = self.glassSampleView()
+        let origin = self.glassSampleOrigin(for: attachmentBackgroundState.frame, in: sampleView)
+        self.attachmentButtonBackground.update(
+            size: attachmentBackgroundState.frame.size,
+            sampleFrom: sampleView,
+            originX: origin.x,
+            originY: origin.y,
+            cornerRadius: attachmentBackgroundState.cornerRadius,
+            isDark: attachmentBackgroundState.isDark,
+            tintColor: attachmentBackgroundState.tintColor,
+            isInteractive: attachmentBackgroundState.isInteractive,
             transition: transition
         )
     }

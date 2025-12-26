@@ -1059,7 +1059,7 @@ public class AttachmentController: ViewController, MinimizableController {
                     let sourceButtonFrame = attachmentButton.convert(attachmentButton.bounds, to: self.view)
                     let sourceButtonScale = sourceButtonFrame.width / targetFrame.width
                     
-                    if let sourceGlassView = findParentGlassBackgroundView(attachmentButton), let glassParams = sourceGlassView.params {
+                    if let sourceGlassSource = findParentGlassBackgroundSource(attachmentButton) {
                         let containerView = ClipContainerView()
                         containerView.update(bounds: CGRect(origin: CGPoint(x: 0.0, y: (targetFrame.height - targetFrame.width) * 0.5), size: CGSize(width: targetFrame.width, height: targetFrame.width)), topCornerRadius: targetFrame.width * 0.5, bottomCornerRadius: targetFrame.width * 0.5, boundsTransition: .immediate, cornersTransition: .immediate)
                         containerView.frame = targetFrame
@@ -1069,8 +1069,8 @@ public class AttachmentController: ViewController, MinimizableController {
                         localGlassView.update(
                             size: targetFrame.size,
                             cornerRadius: 0.0,
-                            isDark: glassParams.isDark,
-                            tintColor: glassParams.tintColor,
+                            isDark: sourceGlassSource.isDark,
+                            tintColor: sourceGlassSource.tintColor,
                             transition: .immediate
                         )
                         localGlassView.frame = CGRect(origin: .zero, size: targetFrame.size)
@@ -1108,10 +1108,10 @@ public class AttachmentController: ViewController, MinimizableController {
                             self.container.frame = initialContainerFrame
                             self.wrapperNode.addSubnode(self.container)
                             containerView.removeFromSuperview()
-                            sourceGlassView.isHidden = false
+                            sourceGlassSource.view.isHidden = false
                             self.isAnimating = false
                         })
-                        sourceGlassView.isHidden = true
+                        sourceGlassSource.view.isHidden = true
                     }
                 } else {
                     let targetPosition = self.container.position
@@ -1164,7 +1164,7 @@ public class AttachmentController: ViewController, MinimizableController {
                     let targetButtonFrame = attachmentButton.convert(attachmentButton.bounds, to: self.view)
                     let targetButtonScale = targetButtonFrame.width / initialFrame.width
                     
-                    if let sourceGlassView = findParentGlassBackgroundView(attachmentButton), let glassParams = sourceGlassView.params {
+                    if let sourceGlassSource = findParentGlassBackgroundSource(attachmentButton) {
                         let containerView = ClipContainerView()
                         containerView.frame = initialFrame
                         containerView.update(bounds: CGRect(origin: .zero, size: initialFrame.size), topCornerRadius: 38.0, bottomCornerRadius: layout.deviceMetrics.screenCornerRadius - 2.0, boundsTransition: .immediate, cornersTransition: .immediate)
@@ -1174,8 +1174,8 @@ public class AttachmentController: ViewController, MinimizableController {
                         localGlassView.update(
                             size: initialFrame.size,
                             cornerRadius: 0.0,
-                            isDark: glassParams.isDark,
-                            tintColor: glassParams.tintColor,
+                            isDark: sourceGlassSource.isDark,
+                            tintColor: sourceGlassSource.tintColor,
                             transition: .immediate
                         )
                         localGlassView.frame = CGRect(origin: .zero, size: initialFrame.size)
@@ -1199,7 +1199,7 @@ public class AttachmentController: ViewController, MinimizableController {
                         }
                         localGlassView.contentView.addSubview(buttonIcon)
                         ComponentTransition(buttonTransition).animateBlur(layer: buttonIcon.layer, fromRadius: 10.0, toRadius: 0.0)
-                        ComponentTransition(buttonTransition).animateBlur(layer: sourceGlassView.contentView.layer, fromRadius: 10.0, toRadius: 0.0)
+                        ComponentTransition(buttonTransition).animateBlur(layer: sourceGlassSource.contentView.layer, fromRadius: 10.0, toRadius: 0.0)
                         
                         containerView.update(bounds: CGRect(origin: CGPoint(x: 0.0, y: (initialFrame.height - initialFrame.width) * 0.5), size: CGSize(width: initialFrame.width, height: initialFrame.width)), topCornerRadius: initialFrame.width * 0.5, bottomCornerRadius: initialFrame.width * 0.5, boundsTransition: scaleTransition, cornersTransition: cornersTransition)
                         scaleTransition.updateBounds(layer: containerView.layer, bounds: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: initialFrame.width, height: initialFrame.width)))
@@ -1211,9 +1211,9 @@ public class AttachmentController: ViewController, MinimizableController {
                         })
                         
                         localGlassView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, delay: 0.2, timingFunction: CAMediaTimingFunctionName.linear.rawValue, removeOnCompletion: false)
-                        scaleTransition.animateTransformScale(view: sourceGlassView, from: 1.0 / targetButtonScale)
+                        scaleTransition.animateTransformScale(view: sourceGlassSource.view, from: 1.0 / targetButtonScale)
                         
-                        positionTransition.animatePosition(layer: sourceGlassView.layer, from: self.view.convert(initialFrame.center, to: sourceGlassView.superview), to: sourceGlassView.center)
+                        positionTransition.animatePosition(layer: sourceGlassSource.view.layer, from: self.view.convert(initialFrame.center, to: sourceGlassSource.view.superview), to: sourceGlassSource.view.center)
                     }
                 } else {
                     let positionTransition: ContainedViewLayoutTransition = .animated(duration: 0.25, curve: .easeInOut)
@@ -1682,11 +1682,30 @@ public class AttachmentController: ViewController, MinimizableController {
     }
 }
 
-private func findParentGlassBackgroundView(_ view: UIView) -> GlassBackgroundView? {
-    if let view = view as? GlassBackgroundView {
-        return view
+private struct GlassBackgroundSource {
+    let view: UIView
+    let contentView: UIView
+    let isDark: Bool
+    let tintColor: GlassBackgroundView.TintColor
+}
+
+private func findParentGlassBackgroundSource(_ view: UIView) -> GlassBackgroundSource? {
+    if let view = view as? GlassBackgroundView, let params = view.params {
+        return GlassBackgroundSource(
+            view: view,
+            contentView: view.contentView,
+            isDark: params.isDark,
+            tintColor: params.tintColor
+        )
+    } else if let view = view as? GlassBackgroundView2, let params = view.params {
+        return GlassBackgroundSource(
+            view: view,
+            contentView: view.contentView,
+            isDark: params.isDark,
+            tintColor: params.tintColor
+        )
     } else if let superview = view.superview {
-        return findParentGlassBackgroundView(superview)
+        return findParentGlassBackgroundSource(superview)
     }
     return nil
 }
