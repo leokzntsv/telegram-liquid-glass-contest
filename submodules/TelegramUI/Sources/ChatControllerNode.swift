@@ -750,7 +750,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.plainInputSeparatorAlpha = nil
         }
         
-        self.navigateButtons = ChatHistoryNavigationButtons(theme: self.chatPresentationInterfaceState.theme, dateTimeFormat: self.chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode, isChatRotated: historyNodeRotated)
+        self.navigateButtons = ChatHistoryNavigationButtons(theme: self.chatPresentationInterfaceState.theme, dateTimeFormat: self.chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode, sampleView: self.contentContainerNode.contentNode.view, isChatRotated: historyNodeRotated)
         self.navigateButtons.accessibilityElementsHidden = true
         
         super.init()
@@ -850,7 +850,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.inputPanelClippingNode.addSubnode(self.inputPanelBackgroundNode)
 
         self.wrappingNode.contentNode.addSubnode(self.messageTransitionNode)
-        self.contentContainerNode.contentNode.addSubnode(self.navigateButtons)
+        self.wrappingNode.contentNode.addSubnode(self.navigateButtons)
         self.wrappingNode.contentNode.addSubnode(self.presentationContextMarker)
         self.contentContainerNode.contentNode.addSubnode(self.contentDimNode)
         
@@ -3472,7 +3472,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let updateInputTextState = self.chatPresentationInterfaceState.interfaceState.effectiveInputState != chatPresentationInterfaceState.interfaceState.effectiveInputState
             self.chatPresentationInterfaceState = chatPresentationInterfaceState
             
-            self.navigateButtons.update(theme: chatPresentationInterfaceState.theme, dateTimeFormat: chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode)
+            self.navigateButtons.update(theme: chatPresentationInterfaceState.theme, dateTimeFormat: chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode, sampleView: self.contentContainerNode.contentNode.view)
             
             if themeUpdated {
                 if case let .color(color) = self.chatPresentationInterfaceState.chatWallpaper, UIColor(rgb: color).isEqual(self.chatPresentationInterfaceState.theme.chat.inputPanel.panelBackgroundColorNoWallpaper) {

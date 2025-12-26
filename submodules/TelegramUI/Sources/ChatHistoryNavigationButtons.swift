@@ -95,24 +95,24 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
         }
     }
     
-    init(theme: PresentationTheme, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode, isChatRotated: Bool) {
+    init(theme: PresentationTheme, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode, sampleView: UIView?, isChatRotated: Bool) {
         self.isChatRotated = isChatRotated
         self.theme = theme
         self.dateTimeFormat = dateTimeFormat
         
-        self.mentionsButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: .mentions)
+        self.mentionsButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: .mentions, sampleView: sampleView)
         self.mentionsButton.alpha = 0.0
         self.mentionsButton.isHidden = true
         
-        self.reactionsButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: .reactions)
+        self.reactionsButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: .reactions, sampleView: sampleView)
         self.reactionsButton.alpha = 0.0
         self.reactionsButton.isHidden = true
         
-        self.downButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: isChatRotated ? .down : .up)
+        self.downButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: isChatRotated ? .down : .up, sampleView: sampleView)
         self.downButton.alpha = 0.0
         self.downButton.isHidden = true
         
-        self.upButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: isChatRotated ? .up : .down)
+        self.upButton = ChatHistoryNavigationButtonNode(theme: theme, backgroundNode: backgroundNode, type: isChatRotated ? .up : .down, sampleView: sampleView)
         self.upButton.alpha = 0.0
         self.upButton.isHidden = true
         
@@ -139,14 +139,14 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
         super.didLoad()
     }
     
-    func update(theme: PresentationTheme, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode) {
+    func update(theme: PresentationTheme, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode, sampleView: UIView?) {
         self.theme = theme
         self.dateTimeFormat = dateTimeFormat
         
-        self.reactionsButton.updateTheme(theme: theme, backgroundNode: backgroundNode)
-        self.mentionsButton.updateTheme(theme: theme, backgroundNode: backgroundNode)
-        self.downButton.updateTheme(theme: theme, backgroundNode: backgroundNode)
-        self.upButton.updateTheme(theme: theme, backgroundNode: backgroundNode)
+        self.reactionsButton.updateTheme(theme: theme, backgroundNode: backgroundNode, sampleView: sampleView)
+        self.mentionsButton.updateTheme(theme: theme, backgroundNode: backgroundNode, sampleView: sampleView)
+        self.downButton.updateTheme(theme: theme, backgroundNode: backgroundNode, sampleView: sampleView)
+        self.upButton.updateTheme(theme: theme, backgroundNode: backgroundNode, sampleView: sampleView)
     }
     
     private var absoluteRect: (CGRect, CGSize)?

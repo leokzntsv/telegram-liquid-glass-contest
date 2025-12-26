@@ -21,7 +21,7 @@ enum ChatHistoryNavigationButtonType {
 class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
     let containerNode: ContextExtractedContentContainingNode
     let buttonNode: HighlightTrackingButtonNode
-    private let backgroundView: GlassBackgroundView
+    private let backgroundView: GlassBackgroundView2
     let imageView: GlassBackgroundView.ContentImageView
     private let badgeBackgroundView: GlassBackgroundView
     private let badgeTextNode: ImmediateAnimatedCountLabelNode
@@ -48,15 +48,17 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
     
     private var theme: PresentationTheme
     private let type: ChatHistoryNavigationButtonType
+    private weak var sampleView: UIView?
     
-    init(theme: PresentationTheme, backgroundNode: WallpaperBackgroundNode, type: ChatHistoryNavigationButtonType) {
+    init(theme: PresentationTheme, backgroundNode: WallpaperBackgroundNode, type: ChatHistoryNavigationButtonType, sampleView: UIView?) {
         self.theme = theme
         self.type = type
+        self.sampleView = sampleView
         
         self.containerNode = ContextExtractedContentContainingNode()
         self.buttonNode = HighlightTrackingButtonNode()
 
-        self.backgroundView = GlassBackgroundView()
+        self.backgroundView = GlassBackgroundView2()
         
         self.imageView = GlassBackgroundView.ContentImageView()
         switch type {
@@ -94,7 +96,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
 
         self.buttonNode.view.addSubview(self.backgroundView)
         self.backgroundView.frame = CGRect(origin: CGPoint(), size: size)
-        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
+        self.updateBackground(transition: .immediate)
         self.imageView.tintColor = theme.chat.inputPanel.panelControlColor
 
         self.backgroundView.contentView.addSubview(self.imageView)
@@ -106,11 +108,12 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         self.frame = CGRect(origin: CGPoint(), size: size)
     }
     
-    func updateTheme(theme: PresentationTheme, backgroundNode: WallpaperBackgroundNode) {
+    func updateTheme(theme: PresentationTheme, backgroundNode: WallpaperBackgroundNode, sampleView: UIView?) {
         if self.theme !== theme {
             self.theme = theme
+            self.sampleView = sampleView
 
-            self.backgroundView.update(size: self.backgroundView.bounds.size, cornerRadius: self.backgroundView.bounds.size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: .immediate)
+            self.updateBackground(transition: .immediate)
             self.imageView.tintColor = theme.chat.inputPanel.panelControlColor
             
             switch self.type {
@@ -141,6 +144,34 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
     private var absoluteRect: (CGRect, CGSize)?
     func update(rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
         self.absoluteRect = (rect, containerSize)
+        self.updateBackground(transition: ComponentTransition(transition))
+    }
+
+    private func backgroundOrigin(in sampleView: UIView) -> CGPoint {
+        if let (absoluteRect, _) = self.absoluteRect {
+            return absoluteRect.origin
+        }
+        return self.backgroundView.convert(CGPoint(), to: sampleView)
+    }
+
+    private func updateBackground(transition: ComponentTransition) {
+        let size = self.backgroundView.bounds.size
+        guard size.width > 0.0, size.height > 0.0 else {
+            return
+        }
+        let sampleView = self.sampleView ?? self.view
+        let origin = self.backgroundOrigin(in: sampleView)
+        self.backgroundView.update(
+            size: size,
+            sampleFrom: sampleView,
+            originX: origin.x,
+            originY: origin.y,
+            cornerRadius: size.height * 0.5,
+            isDark: self.theme.overallDarkAppearance,
+            tintColor: .init(kind: .panel, color: self.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)),
+            isInteractive: false,
+            transition: transition
+        )
     }
     
     @objc func onTap() {
