@@ -1108,7 +1108,7 @@ public final class GlassBackgroundView2: UIView {
             height: size.height,
             width: size.width,
             cornerRadius: radius,
-            outerLayerThickness: 2,
+            outerLayerThickness: 3,
             innerLayerThickness: 2
         )
         self.lastSampleView = sampleView
@@ -1245,7 +1245,7 @@ public final class GlassBackgroundView2: UIView {
                         height: size.height,
                         width: size.width,
                         cornerRadius: outerCornerRadius,
-                        outerLayerThickness: 2,
+                        outerLayerThickness: 3,
                         innerLayerThickness: 2
                     )
                     self.lastSampleView = sampleView
@@ -1333,13 +1333,14 @@ public final class GlassBackgroundView2: UIView {
 
         let leftPillMaskLayer = CAShapeLayer()
         leftPillMaskLayer.frame = leftPillContainer.bounds
+        let inset = abs(outerLayerThickness - innerLayerThickness)
         let leftPillMaskPath = UIBezierPath(
-            roundedRect: leftPillContainer.bounds.insetBy(dx: outerLayerThickness, dy: outerLayerThickness),
-            cornerRadius: max(0.0, cornerRadius - outerLayerThickness) //leftPillContainer.bounds.insetBy(dx: outerLayerThickness, dy: outerLayerThickness).height * 0.5
+            roundedRect: leftPillContainer.bounds.insetBy(dx: inset, dy: inset),
+            cornerRadius: max(0.0, cornerRadius - inset) //leftPillContainer.bounds.insetBy(dx: outerLayerThickness, dy: outerLayerThickness).height * 0.5
         )
         let leftInnerPillMaskPath = UIBezierPath(
-            roundedRect: leftPillContainer.bounds.insetBy(dx: outerLayerThickness + innerLayerThickness, dy: outerLayerThickness + innerLayerThickness),
-            cornerRadius: max(0.0, cornerRadius - (outerLayerThickness + innerLayerThickness)) //leftPillContainer.bounds.insetBy(dx: outerLayerThickness + innerLayerThickness, dy: outerLayerThickness + innerLayerThickness).height * 0.5
+            roundedRect: leftPillContainer.bounds.insetBy(dx: inset + innerLayerThickness, dy: inset + innerLayerThickness),
+            cornerRadius: max(0.0, cornerRadius - (inset + innerLayerThickness)) //leftPillContainer.bounds.insetBy(dx: outerLayerThickness + innerLayerThickness, dy: outerLayerThickness + innerLayerThickness).height * 0.5
         )
         leftPillMaskPath.append(leftInnerPillMaskPath)
         leftPillMaskPath.usesEvenOddFillRule = true
@@ -1421,12 +1422,12 @@ public final class GlassBackgroundView2: UIView {
         let rightPillMaskLayer = CAShapeLayer()
         rightPillMaskLayer.frame = rightPillContainer.bounds
         let rightPillMaskPath = UIBezierPath(
-            roundedRect: rightPillContainer.bounds.insetBy(dx: outerLayerThickness, dy: outerLayerThickness),
-            cornerRadius: max(0.0, cornerRadius - outerLayerThickness) //rightPillContainer.bounds.insetBy(dx: outerLayerThickness, dy: outerLayerThickness).height * 0.5
+            roundedRect: rightPillContainer.bounds.insetBy(dx: inset, dy: inset),
+            cornerRadius: max(0.0, cornerRadius - inset) //rightPillContainer.bounds.insetBy(dx: outerLayerThickness, dy: outerLayerThickness).height * 0.5
         )
         let rightInnerPillMaskPath = UIBezierPath(
-            roundedRect: rightPillContainer.bounds.insetBy(dx: outerLayerThickness + innerLayerThickness, dy: outerLayerThickness + innerLayerThickness),
-            cornerRadius: max(0.0, cornerRadius - (outerLayerThickness + innerLayerThickness)) //rightPillContainer.bounds.insetBy(dx: outerLayerThickness + innerLayerThickness, dy: outerLayerThickness + innerLayerThickness).height * 0.5
+            roundedRect: rightPillContainer.bounds.insetBy(dx: inset + innerLayerThickness, dy: inset + innerLayerThickness),
+            cornerRadius: max(0.0, cornerRadius - (inset + innerLayerThickness)) //rightPillContainer.bounds.insetBy(dx: outerLayerThickness + innerLayerThickness, dy: outerLayerThickness + innerLayerThickness).height * 0.5
         )
         rightPillMaskPath.append(rightInnerPillMaskPath)
         rightPillMaskPath.usesEvenOddFillRule = true
