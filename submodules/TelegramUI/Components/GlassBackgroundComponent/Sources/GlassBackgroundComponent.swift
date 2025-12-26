@@ -1083,7 +1083,7 @@ public final class GlassBackgroundView2: UIView {
         self.layer.insertSublayer(self.portalContainerLayer, below: self.contentContainer.layer)
 
         if self.nativeView == nil {
-            self.blurView = BlurView(maxBlurRadius: 5)
+            self.blurView = BlurView(maxBlurRadius: 17)
             self.contentContainer.insertSubview(blurView!, at: 0)
         }
     }
@@ -1301,19 +1301,11 @@ public final class GlassBackgroundView2: UIView {
 
         let outerPortalLayer = portalClass.init()
         outerPortalLayer.setValue(view.layer, forKey: "sourceLayer")
-//        portalLayer.setValue(true, forKey: "hidesSourceLayer")
-//        portalLayer.setValue(NSValue(cgRect: .init(x: 10, y: 10, width: 30, height: 30)), forKey: "sourceRect")
 
         outerPortalLayer.bounds = CGRect(x: 0, y: 0, width: view.bounds.width, height: view.bounds.height)
         outerPortalLayer.position = .init(x: view.bounds.width * 0.5, y: view.bounds.height * 0.5)
-
         outerPortalLayer.transform = CATransform3DMakeScale(1, -1, 1)
-//        portalLayer.transform = CATransform3DMakeRotation(.pi, 0, 0, 1)
-
         outerPortalLayer.opacity = 1
-//        portalLayer.borderWidth = 1
-//        portalLayer.borderColor = UIColor.black.cgColor
-//        portalLayer.masksToBounds = true
 
         let maskLayer = CAShapeLayer()
 //        maskLayer.frame = portalLayer.bounds
@@ -1677,7 +1669,7 @@ private final class BlurView: UIVisualEffectView {
         variableBlur.setValue(maxBlurRadius, forKey: "inputRadius")
         variableBlur.setValue(true, forKey: "inputNormalizeEdges")
 
-        if let maskImage = makeRadialGradientMask(size: CGSize(width: 100, height: 100)) {
+        if let maskImage = makeUniformMask(size: CGSize(width: 64, height: 64)) {
             variableBlur.setValue(maskImage, forKey: "inputMaskImage")
         }
 
@@ -1687,7 +1679,7 @@ private final class BlurView: UIVisualEffectView {
         }
     }
 
-    private func makeRadialGradientMask(size: CGSize) -> CGImage? {
+    private func makeUniformMask(size: CGSize) -> CGImage? {
         let rendererFormat = UIGraphicsImageRendererFormat()
         rendererFormat.scale = UIScreen.main.scale
         let renderer = UIGraphicsImageRenderer(size: size, format: rendererFormat)
@@ -1695,27 +1687,62 @@ private final class BlurView: UIVisualEffectView {
             let cgContext = context.cgContext
 
             cgContext.saveGState()
-            cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
-            cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
-            cgContext.clear(CGRect(origin: .zero, size: size))
+            cgContext.setFillColor(UIColor.white.withAlphaComponent(0.1).cgColor)
+            cgContext.fill(CGRect(origin: .zero, size: size))
 
-            let colors = [
-                UIColor.white.withAlphaComponent(0).cgColor,
-                UIColor.white.withAlphaComponent(0.3).cgColor,
+//            cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
+//            cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
+//            cgContext.clear(CGRect(origin: .zero, size: size))
+//
+//            let colors = [
 //                UIColor.white.withAlphaComponent(0).cgColor,
-//                UIColor.white.withAlphaComponent(0).cgColor,
-//                UIColor.white.withAlphaComponent(0.1).cgColor,
-//                UIColor.white.withAlphaComponent(0.2).cgColor,
 //                UIColor.white.withAlphaComponent(0.3).cgColor,
-//                UIColor.white.withAlphaComponent(0.4).cgColor,
-            ] as CFArray
-            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, /*0.25, 0.5, 0.65, 0.75, 0.85, 0.95,*/ 1]) else {
-                return
-            }
-
-            cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
+////                UIColor.white.withAlphaComponent(0).cgColor,
+////                UIColor.white.withAlphaComponent(0).cgColor,
+////                UIColor.white.withAlphaComponent(0.1).cgColor,
+////                UIColor.white.withAlphaComponent(0.2).cgColor,
+////                UIColor.white.withAlphaComponent(0.3).cgColor,
+////                UIColor.white.withAlphaComponent(0.4).cgColor,
+//            ] as CFArray
+//            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, /*0.25, 0.5, 0.65, 0.75, 0.85, 0.95,*/ 1]) else {
+//                return
+//            }
+//
+//            cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
             cgContext.restoreGState()
         }
         return image.cgImage
     }
+
+//    private func makeRadialGradientMask(size: CGSize) -> CGImage? {
+//        let rendererFormat = UIGraphicsImageRendererFormat()
+//        rendererFormat.scale = UIScreen.main.scale
+//        let renderer = UIGraphicsImageRenderer(size: size, format: rendererFormat)
+//        let image = renderer.image { context in
+//            let cgContext = context.cgContext
+//
+//            cgContext.saveGState()
+//            cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
+//            cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
+//            cgContext.clear(CGRect(origin: .zero, size: size))
+//
+//            let colors = [
+//                UIColor.white.withAlphaComponent(0).cgColor,
+//                UIColor.white.withAlphaComponent(0.3).cgColor,
+////                UIColor.white.withAlphaComponent(0).cgColor,
+////                UIColor.white.withAlphaComponent(0).cgColor,
+////                UIColor.white.withAlphaComponent(0.1).cgColor,
+////                UIColor.white.withAlphaComponent(0.2).cgColor,
+////                UIColor.white.withAlphaComponent(0.3).cgColor,
+////                UIColor.white.withAlphaComponent(0.4).cgColor,
+//            ] as CFArray
+//            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, /*0.25, 0.5, 0.65, 0.75, 0.85, 0.95,*/ 1]) else {
+//                return
+//            }
+//
+//            cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
+//            cgContext.restoreGState()
+//        }
+//        return image.cgImage
+//    }
 }

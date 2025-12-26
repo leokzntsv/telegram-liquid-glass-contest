@@ -1419,7 +1419,28 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.updateAttachmentBackground(transition: ComponentTransition(transition))
 
         if !self.sendActionButtons.frame.width.isZero {
-            self.sendActionButtons.updateAbsoluteRect(CGRect(origin: rect.origin.offsetBy(dx: self.sendActionButtons.frame.minX, dy: self.sendActionButtons.frame.minY), size: self.sendActionButtons.frame.size), within: containerSize, transition: transition)
+            self.sendActionButtons.updateAbsoluteRect(
+                CGRect(
+                    x: rect.origin.x + self.sendActionButtons.frame.minX,
+                    y: rect.origin.y + self.sendActionButtons.frame.minY,
+                    width: self.sendActionButtons.frame.width,
+                    height: self.sendActionButtons.frame.height
+                ),
+                within: containerSize,
+                transition: transition
+            )
+        }
+        if !self.mediaActionButtons.frame.width.isZero {
+            self.mediaActionButtons.updateAbsoluteRect(
+                CGRect(
+                    x: rect.origin.x + self.mediaActionButtons.frame.minX,
+                    y: rect.origin.y + self.mediaActionButtons.frame.minY,
+                    width: self.mediaActionButtons.frame.width,
+                    height: self.mediaActionButtons.frame.height
+                ),
+                within: containerSize,
+                transition: transition
+            )
         }
         
         let absoluteFrame = self.startButton.view.convert(self.startButton.bounds, to: nil)
