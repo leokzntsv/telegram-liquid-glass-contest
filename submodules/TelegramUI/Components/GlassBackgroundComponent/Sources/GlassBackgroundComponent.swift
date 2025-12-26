@@ -1030,8 +1030,6 @@ public final class GlassBackgroundView2: UIView {
 
     public override init(frame: CGRect) {
         if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
-//            self.backgroundNode = nil
-
             let glassEffect = UIGlassEffect(style: .regular)
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
@@ -1044,8 +1042,6 @@ public final class GlassBackgroundView2: UIView {
             nativeParamsView.addSubview(nativeView)
 
             self.blurView = nil
-//            self.foregroundView = nil
-//            self.shadowView = nil
         } else {
             self.nativeView = nil
             self.nativeViewClippingContext = nil
@@ -1065,19 +1061,9 @@ public final class GlassBackgroundView2: UIView {
 
         super.init(frame: frame)
 
-//        if let shadowView = self.shadowView {
-//            self.addSubview(shadowView)
-//        }
         if let nativeParamsView = self.nativeParamsView {
             self.addSubview(nativeParamsView)
         }
-//        if let backgroundNode = self.backgroundNode {
-//            self.addSubview(backgroundNode.view)
-//        }
-//        if let foregroundView = self.foregroundView {
-//            self.addSubview(foregroundView)
-//            foregroundView.mask = self.maskContainerView
-//        }
         self.addSubview(self.contentContainer)
         self.portalContainerLayer.frame = self.bounds
         self.layer.insertSublayer(self.portalContainerLayer, below: self.contentContainer.layer)
@@ -1147,16 +1133,11 @@ public final class GlassBackgroundView2: UIView {
             self.portalContainerLayer.mask = nil
         }
         self.glassMaskLayer = nil
-//        self.blurView?.removeFromSuperview()
     }
 
     public func update(size: CGSize, sampleFrom sampleView: UIView, originX: CGFloat, originY: CGFloat, cornerRadius: CGFloat, isDark: Bool, tintColor: GlassBackgroundView.TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
         self.update(size: size, sampleFrom: sampleView, originX: originX, originY: originY, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, transition: transition)
     }
-
-//    public func update(size: CGSize, sampleFrom sampleView: UIView, cornerRadius: CGFloat, isDark: Bool, tintColor: GlassBackgroundView.TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
-//        self.update(size: size, sampleFrom: sampleView, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, transition: transition)
-//    }
 
     public func update(size: CGSize, sampleFrom sampleView: UIView, originX: CGFloat, originY: CGFloat, shape: Shape, isDark: Bool, tintColor: GlassBackgroundView.TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
         if self.pendingSampleView != nil {
@@ -1258,28 +1239,12 @@ public final class GlassBackgroundView2: UIView {
             }
         }
 
-//        let shadowInset: CGFloat = 32.0
-//        transition.setFrame(view: self.maskContainerView, frame: CGRect(origin: CGPoint(), size: CGSize(width: size.width + shadowInset * 2.0, height: size.height + shadowInset * 2.0)))
-//        transition.setFrame(view: self.maskContentView, frame: CGRect(origin: CGPoint(x: shadowInset, y: shadowInset), size: size))
-
-//        if let foregroundView = self.foregroundView {
-//            transition.setFrame(view: foregroundView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
-//        }
-//        if let shadowView = self.shadowView {
-//            transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
-//        }
         transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
 
         if let blurView {
             transition.setFrame(view: blurView, frame: CGRect(origin: CGPoint(), size: size))
         }
     }
-
-//    public func update(size: CGSize, sampleFrom sampleView: UIView, shape: Shape, isDark: Bool, tintColor: GlassBackgroundView.TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
-//        let usePresentation = transition.animation.isImmediate
-//        let origin = self.sampleOrigin(in: sampleView, usePresentation: usePresentation)
-//        self.update(size: size, sampleFrom: sampleView, originX: origin.x, originY: origin.y, shape: shape, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, transition: transition)
-//    }
 
     private func createGlassElement(
         sampleFrom view: UIView,
@@ -1308,8 +1273,6 @@ public final class GlassBackgroundView2: UIView {
         outerPortalLayer.opacity = 1
 
         let maskLayer = CAShapeLayer()
-//        maskLayer.frame = portalLayer.bounds
-
         let maskPath = UIBezierPath(
             roundedRect: .init(
                 x: originX,
@@ -1340,9 +1303,6 @@ public final class GlassBackgroundView2: UIView {
         self.glassPortalLayers.append(outerPortalLayer)
         outerPortalLayer.frame.origin.x = outerPortalLayer.frame.origin.x - originX
         outerPortalLayer.frame.origin.y = outerPortalLayer.frame.origin.y - originY
-//        container.layer.borderColor = UIColor.black.cgColor
-//        container.layer.borderWidth = 2
-
 
         // MARK: internal left portal
 
@@ -1513,88 +1473,11 @@ public final class GlassBackgroundView2: UIView {
         rightPortalUpsideDownPieceLayer.frame.origin.x = rightPortalUpsideDownPieceLayer.frame.origin.x - originX + internalRightPortalWidth // `+ internalRightPortalWidth` – place at rightmost semicircle
         rightPortalUpsideDownPieceLayer.frame.origin.y = rightPortalUpsideDownPieceLayer.frame.origin.y - (view.bounds.height - 2 * bottomOffset - internalRightPortalHeight) - bottomOffset
 
-
-        // MARK: internal top portal
-
-        let topPieceLayer = portalClass.init()
-        topPieceLayer.setValue(view.layer, forKey: "sourceLayer")
-        topPieceLayer.bounds = CGRect(x: 0, y: 0, width: view.bounds.width, height: view.bounds.height)
-        topPieceLayer.position = .init(x: view.bounds.width * 0.5, y: view.bounds.height * 0.5)
-        topPieceLayer.transform = CATransform3DMakeScale(1, -1, 1)
-        topPieceLayer.opacity = 1
-
-        let topPieceHeight: CGFloat = 8//min(pillHeight * 0.125, 6)
-        let topPieceWidth = elementWidth - cornerWidth
-        let topPiecePadding = topPieceHeight + frameWidth * 1.5
-
-        let topPieceMaskLayer = CAShapeLayer()
-        let topPieceMaskPath = UIBezierPath(
-            rect: .init(
-                x: originX + cornerWidth * 0.5,
-                y: originY + topPiecePadding + topPieceHeight,//originY + (pillHeight - topPieceHeight - topPieceHeight),
-                width: topPieceWidth,
-                height: topPieceHeight
-            )
-        )
-        topPieceMaskLayer.path = topPieceMaskPath.cgPath
-        topPieceLayer.mask = topPieceMaskLayer
-//        topPieceLayer.frame.origin.y = topPieceLayer.frame.origin.y + (view.bounds.height - 2 * bottomOffset - 2 * pillHeight) + (pillHeight - topPieceHeight) /*+ topPieceHeight*/
-
-        topPieceLayer.frame.origin.y = topPieceLayer.frame.origin.y + (view.bounds.height - 2 * elementHeight - 2 * bottomOffset) + (2 * topPiecePadding + topPieceHeight)
-//        topPieceLayer.frame.origin.y = topPieceLayer.frame.origin.y +
-//        leftPortalUpsideDownPieceLayer.frame.origin.y = leftPortalUpsideDownPieceLayer.frame.origin.y + (view.bounds.height - 2 * bottomOffset - internalLeftPortalHeight)
-
-//        topPieceLayer.borderWidth = 2; topPieceLayer.borderColor = UIColor.red.cgColor; topPieceLayer.backgroundColor =
-//            UIColor.red.withAlphaComponent(0.1).cgColor
-//        view.layer.addSublayer(topPieceLayer)
-
-        // place in container + align
-//        container.layer.addSublayer(topPieceLayer)
-//        self.glassPortalLayers.append(topPieceLayer)
-
-//        leftPortalUpsideDownPieceLayer.frame.origin.x = leftPortalUpsideDownPieceLayer.frame.origin.x - originX - internalLeftPortalWidth // `- internalLeftPortalWidth` – place at leftmost semicircle
-//        leftPortalUpsideDownPieceLayer.frame.origin.y = leftPortalUpsideDownPieceLayer.frame.origin.y - (view.bounds.height - 2 * bottomOffset - internalLeftPortalHeight) - bottomOffset
-
-        topPieceLayer.frame.origin.x = topPieceLayer.frame.origin.x - originX
-//        topPieceLayer.frame.origin.y = topPieceLayer.frame.origin.y - (bottomOffset + (pillHeight - topPieceHeight - topPieceHeight))
-        topPieceLayer.frame.origin.y = topPieceLayer.frame.origin.y - (bottomOffset + topPiecePadding) + 40 // WRONG
-
-//        print(topPieceLayer.frame)
-
-
-        // MARK: add blur
-
-//        if let blurView = self.blurView, blurView.superview == nil {
-//            container.addSubview(blurView)
-//            blurView.frame = container.bounds
-//        }
-
         let containerMaskLayer = CAShapeLayer()
         containerMaskLayer.frame = container.bounds
         containerMaskLayer.path = UIBezierPath(roundedRect: container.bounds, cornerRadius: cornerRadius).cgPath
         self.portalContainerLayer.mask = containerMaskLayer
         self.glassMaskLayer = containerMaskLayer
-
-//        let innerShadowLayer = CAShapeLayer()
-//        innerShadowLayer.frame = container.bounds
-//
-//        innerShadowLayer.shadowColor = UIColor.black.cgColor
-//        innerShadowLayer.shadowOffset = CGSize(width: 0, height: 0)
-//        innerShadowLayer.shadowOpacity = 0.3
-//        innerShadowLayer.shadowRadius = 2
-//        innerShadowLayer.fillRule = .evenOdd
-//
-//        let shadowPath = CGMutablePath()
-//        shadowPath.addPath(UIBezierPath(roundedRect: container.bounds.insetBy(dx: -6, dy: -6), cornerRadius: (container.bounds.height - 12) * 0.5).cgPath)
-//        shadowPath.addPath(UIBezierPath(roundedRect: container.bounds, cornerRadius: container.bounds.height * 0.5).cgPath)
-//        innerShadowLayer.path = shadowPath
-//
-//        let shadowMaskLayer = CAShapeLayer()
-//        let topHalfRect = CGRect(x: 0, y: 0, width: container.bounds.width, height: container.bounds.height * 0.5)
-//        shadowMaskLayer.path = UIBezierPath(rect: topHalfRect).cgPath
-//        innerShadowLayer.mask = shadowMaskLayer
-//
-//        container.layer.addSublayer(innerShadowLayer)
     }
 
 }
@@ -1623,8 +1506,6 @@ private final class BlurView: UIVisualEffectView {
     init(maxBlurRadius: CGFloat = 20) {
         self.maxBlurRadius = maxBlurRadius
         super.init(effect: UIBlurEffect(style: .light))
-//        clipsToBounds = true
-//        layer.cornerRadius = bounds.height * 0.5
         resetEffect()
         if self.subviews.indices.contains(1) {
             let tintOverlayView = subviews[1]
@@ -1689,60 +1570,8 @@ private final class BlurView: UIVisualEffectView {
             cgContext.saveGState()
             cgContext.setFillColor(UIColor.white.withAlphaComponent(0.1).cgColor)
             cgContext.fill(CGRect(origin: .zero, size: size))
-
-//            cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
-//            cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
-//            cgContext.clear(CGRect(origin: .zero, size: size))
-//
-//            let colors = [
-//                UIColor.white.withAlphaComponent(0).cgColor,
-//                UIColor.white.withAlphaComponent(0.3).cgColor,
-////                UIColor.white.withAlphaComponent(0).cgColor,
-////                UIColor.white.withAlphaComponent(0).cgColor,
-////                UIColor.white.withAlphaComponent(0.1).cgColor,
-////                UIColor.white.withAlphaComponent(0.2).cgColor,
-////                UIColor.white.withAlphaComponent(0.3).cgColor,
-////                UIColor.white.withAlphaComponent(0.4).cgColor,
-//            ] as CFArray
-//            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, /*0.25, 0.5, 0.65, 0.75, 0.85, 0.95,*/ 1]) else {
-//                return
-//            }
-//
-//            cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
             cgContext.restoreGState()
         }
         return image.cgImage
     }
-
-//    private func makeRadialGradientMask(size: CGSize) -> CGImage? {
-//        let rendererFormat = UIGraphicsImageRendererFormat()
-//        rendererFormat.scale = UIScreen.main.scale
-//        let renderer = UIGraphicsImageRenderer(size: size, format: rendererFormat)
-//        let image = renderer.image { context in
-//            let cgContext = context.cgContext
-//
-//            cgContext.saveGState()
-//            cgContext.translateBy(x: size.width * 0.5, y: size.height * 0.5)
-//            cgContext.scaleBy(x: size.width * 0.5, y: size.height * 0.5)
-//            cgContext.clear(CGRect(origin: .zero, size: size))
-//
-//            let colors = [
-//                UIColor.white.withAlphaComponent(0).cgColor,
-//                UIColor.white.withAlphaComponent(0.3).cgColor,
-////                UIColor.white.withAlphaComponent(0).cgColor,
-////                UIColor.white.withAlphaComponent(0).cgColor,
-////                UIColor.white.withAlphaComponent(0.1).cgColor,
-////                UIColor.white.withAlphaComponent(0.2).cgColor,
-////                UIColor.white.withAlphaComponent(0.3).cgColor,
-////                UIColor.white.withAlphaComponent(0.4).cgColor,
-//            ] as CFArray
-//            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, /*0.25, 0.5, 0.65, 0.75, 0.85, 0.95,*/ 1]) else {
-//                return
-//            }
-//
-//            cgContext.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: .drawsAfterEndLocation)
-//            cgContext.restoreGState()
-//        }
-//        return image.cgImage
-//    }
 }
