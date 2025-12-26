@@ -2937,10 +2937,26 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let shouldHideMediaButtons = inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil
         let didChangeTextInputHeight = self.previousTextInputHeight.map { abs($0 - textInputHeight) > .ulpOfOne } ?? false
         let shouldMorphMediaButtons = transition.isAnimated && (shouldHideMediaButtons != self.mediaButtonsHidden) && !didChangeTextInputHeight
-        let inputTransition: ContainedViewLayoutTransition = shouldMorphMediaButtons ? .immediate : transition
+        let isMediaButtonsMorphing = self.mediaButtonsMorphLink != nil
+        let inputTransition: ContainedViewLayoutTransition = (shouldMorphMediaButtons || isMediaButtonsMorphing) ? .immediate : transition
         let previousTextInputContainerBackgroundFrame = self.textInputContainerBackgroundView.frame
         let textInputContainerBackgroundFrame = CGRect(x: hideOffset.x + leftInset + textFieldInsets.left, y: hideOffset.y + textFieldInsets.top, width: textInputWidth, height: contentHeight)
         let textInputFrame = textInputContainerBackgroundFrame
+
+        if isMediaButtonsMorphing {
+            let targetScale: CGFloat = shouldHideMediaButtons ? (mediaActionButtonsCollapsedSize.width / mediaActionButtonsSize.width) : 1.0
+            if self.mediaButtonsMorphInputToFrame != textInputContainerBackgroundFrame || abs(self.mediaButtonsMorphScaleTo - targetScale) > .ulpOfOne {
+                let inputLayer = self.textInputContainerBackgroundView.layer.presentation() ?? self.textInputContainerBackgroundView.layer
+                self.mediaButtonsMorphInputFromFrame = inputLayer.frame
+                self.mediaButtonsMorphInputToFrame = textInputContainerBackgroundFrame
+                self.mediaButtonsMorphScaleFrom = self.currentMediaButtonsScale()
+                self.mediaButtonsMorphScaleTo = targetScale
+                self.mediaButtonsMorphInputCornerRadius = floor(minimalInputHeight * 0.5)
+                self.mediaButtonsMorphInputIsDark = interfaceState.theme.overallDarkAppearance
+                self.mediaButtonsMorphInputTintColor = .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
+                self.mediaButtonsMorphElapsed = 0.0
+            }
+        }
         
         inputTransition.updateFrame(view: self.accessoryPanelContainer, frame: CGRect(origin: CGPoint(), size: textInputContainerBackgroundFrame.size))
         inputTransition.updateFrame(view: self.textInputContainerBackgroundView, frame: textInputContainerBackgroundFrame)
@@ -3240,7 +3256,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     self.mediaButtonsHiddenAnchor = self.mediaActionButtons.frame.center
                 }
             }
-            if let anchor = self.mediaButtonsHiddenAnchor {
+            if var anchor = self.mediaButtonsHiddenAnchor {
+                anchor.y = textInputContainerBackgroundFrame.maxY - mediaActionButtonsFrame.height * 0.5
+                self.mediaButtonsHiddenAnchor = anchor
                 mediaActionButtonsFrame.origin = CGPoint(x: anchor.x - mediaActionButtonsFrame.width * 0.5, y: anchor.y - mediaActionButtonsFrame.height * 0.5)
             }
         } else {
