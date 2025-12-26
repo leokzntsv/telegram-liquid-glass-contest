@@ -1010,6 +1010,7 @@ public final class GlassBackgroundView2: UIView {
     private var glassMaskLayer: CALayer?
     private var blurView: BlurView?
     private var blurMaskLayer: CAShapeLayer?
+    private let specularLayer = CAGradientLayer()
     private let portalContainerLayer = CALayer()
 
     private let nativeView: UIVisualEffectView?
@@ -1071,6 +1072,9 @@ public final class GlassBackgroundView2: UIView {
         if self.nativeView == nil {
             self.blurView = BlurView(maxBlurRadius: 17)
             self.contentContainer.insertSubview(blurView!, at: 0)
+            self.specularLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
+            self.specularLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
+            blurView?.layer.addSublayer(self.specularLayer)
         }
     }
 
@@ -1171,6 +1175,20 @@ public final class GlassBackgroundView2: UIView {
             maskLayer.path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: size), cornerRadius: outerCornerRadius).cgPath
             blurView.layer.mask = maskLayer
             self.blurMaskLayer = maskLayer
+            self.specularLayer.frame = blurView.bounds
+            if isDark {
+                self.specularLayer.colors = [
+                    UIColor.white.withAlphaComponent(0.10).cgColor,
+                    UIColor.white.withAlphaComponent(0.03).cgColor,
+                    UIColor.clear.cgColor
+                ]
+            } else {
+                self.specularLayer.colors = [
+                    UIColor.white.withAlphaComponent(0.12).cgColor,
+                    UIColor.white.withAlphaComponent(0.0).cgColor,
+                    UIColor.black.withAlphaComponent(0.05).cgColor
+                ]
+            }
         }
 
         let params = Params(shape: shape, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, sampleView: sampleView)
