@@ -506,7 +506,7 @@ public final class ChatSendGroupMediaMessageContextPreview: UIView, ChatSendMess
         }, displayTodoToggleUnavailable: { _ in
         }, openStarsPurchase: { _ in
         }, automaticMediaDownloadSettings: MediaAutoDownloadSettings.defaultSettings,
-        pollActionState: ChatInterfacePollActionState(), stickerSettings: ChatInterfaceStickerSettings(), presentationContext: ChatPresentationContext(context: self.context, backgroundNode: self.wallpaperBackgroundNode))
+        pollActionState: ChatInterfacePollActionState(), stickerSettings: ChatInterfaceStickerSettings(), presentationContext: ChatPresentationContext(context: self.context, backgroundNode: self.wallpaperBackgroundNode, chatContentView: nil))
         
         let associatedData = ChatMessageItemAssociatedData(
             automaticDownloadPeerType: .channel,

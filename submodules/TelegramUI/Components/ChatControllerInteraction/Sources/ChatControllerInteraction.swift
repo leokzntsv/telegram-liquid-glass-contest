@@ -71,11 +71,13 @@ public struct UnreadMessageRangeKey: Hashable {
 
 public class ChatPresentationContext {
     public weak var backgroundNode: WallpaperBackgroundNode?
+    public weak var chatContentView: UIView?
     public let animationCache: AnimationCache
     public let animationRenderer: MultiAnimationRenderer
 
-    public init(context: AccountContext, backgroundNode: WallpaperBackgroundNode?) {
+    public init(context: AccountContext, backgroundNode: WallpaperBackgroundNode?, chatContentView: UIView?) {
         self.backgroundNode = backgroundNode
+        self.chatContentView = chatContentView
         
         self.animationCache = context.animationCache
         self.animationRenderer = context.animationRenderer

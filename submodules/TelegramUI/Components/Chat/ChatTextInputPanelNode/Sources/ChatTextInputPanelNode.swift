@@ -231,7 +231,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var textLockIconNode: ASImageNode?
     public var contextPlaceholderNode: TextNode?
     public var slowmodePlaceholderNode: ChatTextInputSlowmodePlaceholderNode?
-    private let textInputContainerBackgroundView: GlassBackgroundView
+    private let textInputContainerBackgroundView: GlassBackgroundView2
     private let accessoryPanelContainer: UIView
     public let textInputNodeClippingContainer: ASDisplayNode
     public let textInputSeparator: GlassBackgroundView.ContentColorView
@@ -644,8 +644,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.glassBackgroundView = GlassBackgroundView()
         self.glassBackgroundMorphLayer = CALayer()
 
-        self.textInputContainerBackgroundView = GlassBackgroundView(frame: CGRect())
-        
+        self.textInputContainerBackgroundView = GlassBackgroundView2(frame: CGRect())
+
         self.accessoryPanelContainer = UIView()
         self.accessoryPanelContainer.clipsToBounds = true
         
@@ -1415,6 +1415,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var absoluteRect: (CGRect, CGSize)?
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
         self.absoluteRect = (rect, containerSize)
+        self.updateGlassBackground(transition: ComponentTransition(transition))
 
         if !self.sendActionButtons.frame.width.isZero {
             self.sendActionButtons.updateAbsoluteRect(CGRect(origin: rect.origin.offsetBy(dx: self.sendActionButtons.frame.minX, dy: self.sendActionButtons.frame.minY), size: self.sendActionButtons.frame.size), within: containerSize, transition: transition)
@@ -2912,7 +2913,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         contentHeight += textFieldInsets.bottom
         
         let shouldHideMediaButtons = inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil
-        let shouldMorphMediaButtons = transition.isAnimated && (shouldHideMediaButtons != self.mediaButtonsHidden)
+        let didChangeTextInputHeight = self.previousTextInputHeight.map { abs($0 - textInputHeight) > .ulpOfOne } ?? false
+        let shouldMorphMediaButtons = transition.isAnimated && (shouldHideMediaButtons != self.mediaButtonsHidden) && !didChangeTextInputHeight
         let inputTransition: ContainedViewLayoutTransition = shouldMorphMediaButtons ? .immediate : transition
         let previousTextInputContainerBackgroundFrame = self.textInputContainerBackgroundView.frame
         let textInputContainerBackgroundFrame = CGRect(x: hideOffset.x + leftInset + textFieldInsets.left, y: hideOffset.y + textFieldInsets.top, width: textInputWidth, height: contentHeight)
@@ -2922,12 +2924,20 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         inputTransition.updateFrame(view: self.textInputContainerBackgroundView, frame: textInputContainerBackgroundFrame)
         
         self.updateCounterTextNode(backgroundSize: textInputContainerBackgroundFrame.size, transition: inputTransition)
-        
+
         let textInputContainerBackgroundTransition = ComponentTransition(inputTransition)
-        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: textInputContainerBackgroundTransition)
-        
+        self.glassBackgroundState = (
+            frame: textInputContainerBackgroundFrame,
+            cornerRadius: floor(minimalInputHeight * 0.5),
+            isDark: interfaceState.theme.overallDarkAppearance,
+            tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)),
+            isInteractive: true
+        )
+        self.updateGlassBackground(transition: textInputContainerBackgroundTransition)
+
         inputTransition.updateFrame(layer: self.textInputBackgroundNode.layer, frame: textInputContainerBackgroundFrame)
         transition.updateAlpha(node: self.textInputBackgroundNode, alpha: audioRecordingItemsAlpha)
+        self.previousTextInputHeight = textInputHeight
         
         if let removedAccessoryPanelView {
             if let removedAccessoryPanelView = removedAccessoryPanelView as? ChatInputAccessoryPanelView {
@@ -3618,6 +3628,40 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var mediaButtonsMorphInputCornerRadius: CGFloat = 0.0
     private var mediaButtonsMorphInputIsDark: Bool = false
     private var mediaButtonsMorphInputTintColor: GlassBackgroundView.TintColor = .init(kind: .panel, color: .clear)
+    private var glassBackgroundState: (frame: CGRect, cornerRadius: CGFloat, isDark: Bool, tintColor: GlassBackgroundView.TintColor, isInteractive: Bool)?
+    private var previousTextInputHeight: CGFloat?
+
+    private func glassSampleView() -> UIView {
+        return self.presentationContext?.chatContentView
+            ?? self.presentationContext?.backgroundNode?.view
+            ?? self.view
+    }
+
+    private func glassSampleOrigin(for frame: CGRect, in sampleView: UIView) -> CGPoint {
+        if let (absoluteRect, _) = self.absoluteRect {
+            return CGPoint(x: absoluteRect.minX + frame.minX, y: absoluteRect.minY + frame.minY)
+        }
+        return self.view.convert(frame.origin, to: sampleView)
+    }
+
+    private func updateGlassBackground(transition: ComponentTransition) {
+        guard let glassBackgroundState = self.glassBackgroundState else {
+            return
+        }
+        let sampleView = self.glassSampleView()
+        let origin = self.glassSampleOrigin(for: glassBackgroundState.frame, in: sampleView)
+        self.textInputContainerBackgroundView.update(
+            size: glassBackgroundState.frame.size,
+            sampleFrom: sampleView,
+            originX: origin.x,
+            originY: origin.y,
+            cornerRadius: glassBackgroundState.cornerRadius,
+            isDark: glassBackgroundState.isDark,
+            tintColor: glassBackgroundState.tintColor,
+            isInteractive: glassBackgroundState.isInteractive,
+            transition: transition
+        )
+    }
 
     private func currentMediaButtonsScale() -> CGFloat {
         let layer = self.mediaActionButtons.layer.presentation() ?? self.mediaActionButtons.layer
@@ -3656,8 +3700,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.textInputContainerBackgroundView.frame = inputFromFrame
+        let sampleView = self.glassSampleView()
+        let origin = self.glassSampleOrigin(for: inputFromFrame, in: sampleView)
         self.textInputContainerBackgroundView.update(
             size: inputFromFrame.size,
+            sampleFrom: sampleView,
+            originX: origin.x,
+            originY: origin.y,
             cornerRadius: inputCornerRadius,
             isDark: inputIsDark,
             tintColor: inputTintColor,
@@ -3698,8 +3747,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.textInputContainerBackgroundView.frame = inputFrame
+        let sampleView = self.glassSampleView()
+        let origin = self.glassSampleOrigin(for: inputFrame, in: sampleView)
         self.textInputContainerBackgroundView.update(
             size: inputFrame.size,
+            sampleFrom: sampleView,
+            originX: origin.x,
+            originY: origin.y,
             cornerRadius: mediaButtonsMorphInputCornerRadius,
             isDark: mediaButtonsMorphInputIsDark,
             tintColor: mediaButtonsMorphInputTintColor,

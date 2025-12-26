@@ -850,7 +850,8 @@ public final class ChatTextInputPanelComponent: Component {
                     presentationInterfaceState: presentationInterfaceState,
                     presentationContext: ChatPresentationContext(
                         context: component.context,
-                        backgroundNode: nil
+                        backgroundNode: nil,
+                        chatContentView: nil
                     ),
                     presentController: { c in
                         
